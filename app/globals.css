@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+
+
+
+
+@tailwind utilities;
+
+html, body, #__next { height: 100%; padding: 0; scroll-behavior: smooth;}
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.main-wrap { margin-left: 16rem; padding: 0; }
+
+
