@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, DocumentData, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { db, auth } from '@/app/lib/firebase/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { collection, getDocs, DocumentData, doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/app/lib/firebase/firebase';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/app/lib/supabase/client';
+import { createActivityLog } from '@/app/lib/supabase/activityLogs';
 import EditProjectModal from '@/app/components/EditProjectModal';
 interface Project {
   id: string;
@@ -26,45 +27,40 @@ interface Project {
   [key: string]: unknown;
 }
 
-// Proper admin check implementation
+// Admin check via Supabase profiles.role
 const useIsAdmin = () => {
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    const checkAdminStatus = () => {
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        setLoading(true);
-        if (user) {
-          try {
-            // Check user document in Firestore for admin role
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              // Check if user has admin role
-              setIsAdmin(userData?.role === 'admin' || userData?.isAdmin === true);
-            } else {
-              setIsAdmin(false);
-            }
-          } catch (error) {
-            console.error('Error checking admin status:', error);
-            setIsAdmin(false);
-          }
-        } else {
-          setIsAdmin(false);
+    let cancelled = false
+    const check = async () => {
+      setLoading(true)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          if (!cancelled) setIsAdmin(false)
+          return
         }
-        setLoading(false);
-      });
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (!cancelled) setIsAdmin((profile as any)?.role === 'admin')
+      } catch (e) {
+        console.error('Error checking admin status:', e)
+        if (!cancelled) setIsAdmin(false)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [])
 
-      return unsubscribe;
-    };
-
-    const unsubscribe = checkAdminStatus();
-    return () => unsubscribe();
-  }, []);
-  
-  return { isAdmin, loading };
-};
+  return { isAdmin, loading }
+}
 
 export default function SaveProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -106,7 +102,22 @@ export default function SaveProjectsPage() {
   }, []);
 
   const handleAddQuotation = (projectId: string, refNo: string) => {
-    router.push(`/component/QuotationForm?projectId=${projectId}&refNo=${refNo}`);
+    ;(async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await createActivityLog({
+            userId: user.id,
+            action: 'Opened quotation form',
+            details: `Preparing quotation for project ${refNo || projectId}`,
+            metadata: { projectId, refNo }
+          })
+        }
+      } catch (e) {
+        console.warn('Activity log failed for opening quotation form', e)
+      }
+    })()
+    router.push(`/multifactors/saved-projects/QuotationForm?projectId=${projectId}&refNo=${refNo}`);
   };
 
   const handleEdit = (project: Project) => {
@@ -138,21 +149,32 @@ export default function SaveProjectsPage() {
     
     setLoading(true);
     try {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        alert('You must be logged in to perform admin actions.');
-        return;
-      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { alert('You must be logged in.'); return }
 
       const projectRef = doc(db, 'projects', projectForRemarks.id);
       const updateData = {
         adminStatus,
         adminRemarks,
         adminUpdatedAt: new Date(),
-        adminUpdatedBy: currentUser.uid,
+        adminUpdatedBy: user.id,
       };
       
       await updateDoc(projectRef, updateData);
+      // Log activity (best-effort)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await createActivityLog({
+            userId: user.id,
+            action: 'Updated project admin remarks',
+            details: `Project ${projectForRemarks.refNo || projectForRemarks.id} admin remarks updated`,
+            metadata: { collection: 'projects', projectId: projectForRemarks.id }
+          })
+        }
+      } catch (e) {
+        console.warn('Activity log failed for admin remarks update', e)
+      }
       
       // Update local state
       setProjects(prev => prev.map(p => 

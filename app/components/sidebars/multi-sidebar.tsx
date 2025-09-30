@@ -12,6 +12,8 @@ import {
   Menu,
   X
 } from 'lucide-react'
+import { ListOrdered } from 'lucide-react'
+import { ShoppingCart } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/app/lib/supabase/client'
 import UserProfile from '@/app/components/ui/user-profile'
@@ -43,6 +45,16 @@ const baseMenuItems: MenuItem[] = [
     name: 'Suppliers & Customers',
     href: '/multifactors/suppliers-customers',
     icon: Users
+  },
+  {
+    name: 'Purchased Order',
+    href: '/multifactors/purchased-order',
+    icon: ShoppingCart
+  },
+  {
+    name: 'Activity Logs',
+    href: '/multifactors/activity-logs',
+    icon: ListOrdered
   }
 ]
 

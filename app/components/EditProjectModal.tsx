@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase/client';
+import { createActivityLog } from '@/app/lib/supabase/activityLogs';
 import { db } from '@/app/lib/firebase/firebase';
 interface Project {
   id: string;
@@ -120,6 +122,21 @@ export default function EditProjectModal({
 
       // Call the onSave callback with updated project
       onSave(formData);
+
+      // Log activity (best-effort)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          await createActivityLog({
+            userId: user.id,
+            action: 'Updated project',
+            details: `Project ${project.refNo || project.id} updated`,
+            metadata: { collection: 'projects', projectId: project.id }
+          })
+        }
+      } catch (e) {
+        console.warn('Activity log failed for project update', e)
+      }
     } catch (error) {
       console.error('Error updating project:', error);
       // You might want to show an error message to the user here

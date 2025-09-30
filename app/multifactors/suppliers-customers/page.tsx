@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { db } from '@/app/lib/firebase/firebase';
 import { collection, addDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '@/app/lib/supabase/client'
+import { createActivityLog } from '@/app/lib/supabase/activityLogs'
 
 export default function AdminSupplierCustomerPage() {
   const [contacts, setContacts] = useState([]);
@@ -46,13 +48,28 @@ export default function AdminSupplierCustomerPage() {
 
     const collectionName = formData.type === 'customer' ? 'customers' : 'suppliers';
     
-    await addDoc(collection(db, collectionName), {
+    const docRef = await addDoc(collection(db, collectionName), {
       name: formData.name.trim(),
       position: formData.position.trim(),
       address: formData.address.trim(),
       contactNumber: formData.contactNumber.trim(),
       createdAt: serverTimestamp()
     });
+
+    // Log activity (best-effort)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await createActivityLog({
+          userId: user.id,
+          action: formData.type === 'customer' ? 'Added customer' : 'Added supplier',
+          details: `${formData.type} ${formData.name.trim()} created (id: ${docRef.id})`,
+          metadata: { collection: collectionName }
+        })
+      }
+    } catch (e) {
+      console.warn('Activity log failed for contact creation', e)
+    }
 
     // Reset form and close modal
     setFormData({

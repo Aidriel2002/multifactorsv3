@@ -10,6 +10,12 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Define quotation type
 interface Quotation {
@@ -20,7 +26,6 @@ interface Quotation {
   grandTotal?: number;
 }
 
-// Simple placeholder icon components (SVG inline)
 const IconPlaceholder = ({ size = 10 }: { size?: number }) => (
   <div
     style={{
@@ -54,13 +59,24 @@ export default function AdminDashboard() {
         const pendingSnapshot = await getDocs(pendingQuery);
         setPendingApprovals(pendingSnapshot.size);
 
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        setUserCount(usersSnapshot.size);
+        // Fetch users from Supabase
+        const { data: usersData, count, error: usersError } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact' });
+        
+        if (usersError) {
+          console.error('Error fetching users from Supabase:', usersError);
+          setUserCount(0);
+        } else {
+          console.log('Supabase users data:', usersData);
+          console.log('Supabase users count:', count);
+          setUserCount(count || 0);
+        }
 
         const recentQuery = query(
           collection(db, 'quotations'),
           orderBy('date', 'desc'),
-          limit(5)
+          limit(4)
         );
         const recentSnapshot = await getDocs(recentQuery);
         const recentList: Quotation[] = recentSnapshot.docs.map(doc => ({
@@ -130,9 +146,9 @@ export default function AdminDashboard() {
 
   return (
     <>
-    <div className="flex min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 mx-auto"> 
-      <div className="flex-1 flex flex-col">
-        <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-slate-200 px-6 py-4 flex justify-between items-center">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 mx-auto overflow-hidden"> 
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white/80 backdrop-blur-sm shadow-sm border-b border-slate-200 px-6 py-4 flex justify-between items-center flex-shrink-0">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Dashboard Overview</h1>
             <p className="text-slate-600 mt-1">
@@ -141,7 +157,7 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-y-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <StatCard
               title="Total Quotations"
@@ -156,7 +172,7 @@ export default function AdminDashboard() {
               trend=""
             />
             <StatCard
-              title="Active Users"
+              title="Total Users"
               value={userCount}
               color="text-emerald-600"
               trend=""
@@ -167,7 +183,7 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-semibold text-slate-900">Recent Quotations</h2>
-                <Link href="/component/quotation-list" passHref>
+                <Link href="/multifactors/saved-projects/quotation-list" passHref>
                   <button className="text-indigo-600 hover:text-indigo-700 font-medium text-sm">View All</button>
                 </Link>
               </div>
@@ -199,17 +215,17 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <h2 className="text-xl font-semibold text-slate-900 mb-6">Quick Actions</h2>
               <div className="space-y-3">
-                <Link href="/component/QuotationForm" passHref>
+                <Link href="/multifactors/saved-projects/QuotationForm" passHref>
                   <button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 m-2">
                     Create New Quotation
                   </button>
                 </Link>
-                <Link href="/admin/approvals" passHref>
+                <Link href="/multifactors/account-approval" passHref>
                   <button className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 m-2">
                     Manage Users
                   </button>
                 </Link>
-                <Link href="/component/quotation-list" passHref>
+                <Link href="/multifactors/saved-projects/quotation-list" passHref>
                   <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 px-4 rounded-lg transition-colors duration-200 m-2">
                     Quotation List
                   </button>

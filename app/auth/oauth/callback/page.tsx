@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/app/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { createActivityLog } from '@/app/lib/supabase/activityLogs'
 
 // Ensure a profile exists for OAuth users
 const ensureProfile = async (user: any) => {
@@ -141,6 +142,16 @@ export default function OAuthCallback() {
         }
 
         await updateLastActive()
+        try {
+          const user = session.user
+          await createActivityLog({
+            userId: user.id,
+            action: 'Logged in',
+            details: 'User successfully authenticated via OAuth',
+          })
+        } catch (e) {
+          console.warn('Failed to record login activity', e)
+        }
         router.push("/multifactors")
       } catch (err) {
         console.error("OAuth callback error:", err)

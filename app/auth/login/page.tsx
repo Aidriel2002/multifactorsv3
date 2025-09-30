@@ -5,6 +5,7 @@ import { supabase } from "@/app/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import RegistrationModal from "@/app/auth/registration/page"
 import { ensureProfile } from "@/app/lib/supabase/profile";
+import { createActivityLog } from '@/app/lib/supabase/activityLogs'
 
 const updateLastActive = async () => {
   try {
@@ -188,7 +189,7 @@ export default function LoginPage() {
         // Sign out if not approved
         await supabase.auth.signOut()
         
-        setError(statusCheck.message)
+        setError(statusCheck.message || '')
         
         // Show resend option for unconfirmed emails
         if (statusCheck.error === 'email_not_confirmed') {
@@ -198,9 +199,18 @@ export default function LoginPage() {
         return
       }
 
-      // Update last active and redirect
+      // Update last active and log activity, then redirect
       if (data.user) {
         await updateLastActive()
+        try {
+          await createActivityLog({
+            userId: data.user.id,
+            action: 'Logged in',
+            details: 'User authenticated with email/password',
+          })
+        } catch (e) {
+          console.warn('Failed to record login activity', e)
+        }
       }
 
       router.push("/multifactors")
