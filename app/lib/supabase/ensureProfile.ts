@@ -15,7 +15,6 @@ export const ensureProfile = async (user: any) => {
   }
 
   if (existingProfile) {
-    // Always update email/full_name in case they changed
     const { data: updatedProfile, error: updateError } = await supabase
       .from("profiles")
       .update({
@@ -35,7 +34,6 @@ export const ensureProfile = async (user: any) => {
     return updatedProfile
   }
 
-  // If no profile, insert new
   const { data, error: insertError } = await supabase
     .from("profiles")
     .insert({
@@ -43,7 +41,7 @@ export const ensureProfile = async (user: any) => {
       email: user.email,
       full_name: user.user_metadata?.full_name || user.user_metadata?.name || "",
       avatar_url: user.user_metadata?.avatar_url || "",
-      status: false, // pending approval
+      status: false, 
       created_at: new Date().toISOString(),
       last_active: new Date().toISOString(),
     })

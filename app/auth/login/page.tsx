@@ -1,12 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { supabase } from "@/app/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import RegistrationModal from "@/app/auth/registration/page"
 import { ensureProfile } from "@/app/lib/supabase/profile";
 
-// Update last active timestamp
 const updateLastActive = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
@@ -26,7 +25,6 @@ const updateLastActive = async () => {
   }
 }
 
-// Check user email confirmation and admin approval status
 const checkUserStatus = async () => {
   try {
     const { data: { user } } = await supabase.auth.getUser()
@@ -72,15 +70,16 @@ const checkUserStatus = async () => {
       }
     }
 
-    
-if (profile.status !== true) {
-  return {
-    success: false,
-    error: "account_not_approved",
-    message: "Pending Approval",
-  }
-}
-
+    // Check if status is 'approved' (not just true/false boolean)
+    if (profile.status !== 'approved') {
+      return {
+        success: false,
+        error: "account_not_approved",
+        message: profile.status === 'rejected' 
+          ? "Your account has been rejected. Please contact support."
+          : "Your account is pending approval. Please wait for an administrator to approve your account.",
+      }
+    }
 
     return { success: true }
   } catch (error) {
@@ -123,6 +122,24 @@ export default function LoginPage() {
   const [resendLoading, setResendLoading] = useState(false)
   const [resendMessage, setResendMessage] = useState<string | null>(null)
   const router = useRouter()
+
+  // Check for OAuth errors in URL on component mount
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const errorDescription = params.get('error_description')
+      const errorCode = params.get('error')
+      
+      if (errorDescription) {
+        setError(decodeURIComponent(errorDescription))
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname)
+      } else if (errorCode) {
+        setError('An error occurred during Google sign-in. Please try again.')
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
+  })
 
   const handleResendConfirmation = async () => {
     if (!email) {
@@ -201,26 +218,27 @@ export default function LoginPage() {
     setError(null)
     
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/oauth/callback`
+          redirectTo: `${window.location.origin}/auth/oauth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       })
-      if (!error) {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (user) {
-    await ensureProfile(user) // 👈 auto-create/update profile
-  }
-}
       
       if (error) {
         setError(error.message)
         setLoading(false)
+        return
       }
-    } catch (error) {
+
+      // OAuth will redirect, so loading state will persist until redirect
+    } catch (error: any) {
       console.error('Google login error:', error)
-      setError('An unexpected error occurred')
+      setError(error.message || 'An unexpected error occurred during Google sign-in')
       setLoading(false)
     }
   }

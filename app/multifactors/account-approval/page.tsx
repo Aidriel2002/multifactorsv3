@@ -21,7 +21,9 @@ import {
     Mail,
     Phone,
     MapPin,
-    Eye
+    Eye,
+    Check,
+    X
 } from 'lucide-react'
 
 interface UserProfile {
@@ -88,11 +90,9 @@ export default function UserRoleManagement() {
         }
     }
 
-    // Simplified useEffect - only fetches users
     useEffect(() => {
         fetchUsers()
 
-        // Set up real-time subscription for user profile changes
         const subscription = supabase
             .channel('profiles-changes')
             .on('postgres_changes', 
@@ -102,13 +102,11 @@ export default function UserRoleManagement() {
                     table: 'profiles' 
                 }, 
                 (payload) => {
-                    // Refresh data when profiles are updated
                     fetchUsers()
                 }
             )
             .subscribe()
 
-        // Optionally, refresh data every 30 seconds to catch last_active updates
         const intervalId = setInterval(fetchUsers, 30000)
 
         return () => {
@@ -456,18 +454,20 @@ export default function UserRoleManagement() {
                                                             <button
                                                                 onClick={() => updateUserStatus(user.id, 'approved')}
                                                                 disabled={updating === user.id}
-                                                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
-                                                                title="Approve User"
+                                                                className="inline-flex items-center px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                title="Accept User"
                                                             >
-                                                                <UserCheck className="w-4 h-4" />
+                                                                <Check className="w-3.5 h-3.5 mr-1" />
+                                                                
                                                             </button>
                                                             <button
                                                                 onClick={() => updateUserStatus(user.id, 'rejected')}
                                                                 disabled={updating === user.id}
-                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                                                className="inline-flex items-center px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 title="Reject User"
                                                             >
-                                                                <UserX className="w-4 h-4" />
+                                                                <X className="w-3.5 h-3.5 mr-1" />
+                                                                
                                                             </button>
                                                         </>
                                                     )}
@@ -529,8 +529,8 @@ export default function UserRoleManagement() {
                                             <Image
                                                 src={selectedUser.avatar_url}
                                                 alt={`${selectedUser.first_name} ${selectedUser.last_name}`}
-                                                width={40}
-                                                height={40}
+                                                width={64}
+                                                height={64}
                                                 className="rounded-full object-cover"
                                             />
                                         ) : (
@@ -542,7 +542,7 @@ export default function UserRoleManagement() {
                                             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white"></div>
                                         )}
                                     </div>
-                                    <div className="ml-4">
+                                    <div className="ml-4 flex-1">
                                         <h3 className="text-lg font-semibold text-gray-900">
                                             {selectedUser.first_name} {selectedUser.last_name}
                                         </h3>
@@ -557,6 +557,36 @@ export default function UserRoleManagement() {
                                         </div>
                                     </div>
                                 </div>
+
+                                {selectedUser.status === 'pending' && (
+                                    <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                        <p className="text-sm text-yellow-800 mb-3 font-medium">This user is pending approval</p>
+                                        <div className="flex space-x-3">
+                                            <button
+                                                onClick={() => {
+                                                    updateUserStatus(selectedUser.id, 'approved')
+                                                    setShowUserModal(false)
+                                                }}
+                                                disabled={updating === selectedUser.id}
+                                                className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                                            >
+                                                <Check className="w-4 h-4 mr-2" />
+                                                Accept User
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    updateUserStatus(selectedUser.id, 'rejected')
+                                                    setShowUserModal(false)
+                                                }}
+                                                disabled={updating === selectedUser.id}
+                                                className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                                            >
+                                                <X className="w-4 h-4 mr-2" />
+                                                Reject User
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>

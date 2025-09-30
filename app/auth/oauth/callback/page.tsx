@@ -12,17 +12,58 @@ const ensureProfile = async (user: any) => {
     .eq("id", user.id)
     .maybeSingle()
 
-  if (existingProfile) return existingProfile
+  if (existingProfile) {
+    // If profile exists but missing names, update it
+    if (!existingProfile.first_name || !existingProfile.last_name) {
+      const userMetadata = user.user_metadata || {}
+      const fullName = userMetadata.full_name || userMetadata.name || ''
+      const firstName = userMetadata.first_name || userMetadata.given_name || fullName.split(' ')[0] || ''
+      const lastName = userMetadata.last_name || userMetadata.family_name || fullName.split(' ').slice(1).join(' ') || ''
+      
+      console.log('Updating existing profile with names:', { firstName, lastName })
+      
+      await supabase
+        .from("profiles")
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
+          avatar_url: userMetadata.avatar_url || userMetadata.picture || existingProfile.avatar_url,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id)
+    }
+    
+    return existingProfile
+  }
+
+  // Extract names from user metadata
+  const userMetadata = user.user_metadata || {}
+  const fullName = userMetadata.full_name || userMetadata.name || ''
+  const firstName = userMetadata.first_name || userMetadata.given_name || fullName.split(' ')[0] || ''
+  const lastName = userMetadata.last_name || userMetadata.family_name || fullName.split(' ').slice(1).join(' ') || ''
+  
+  console.log('Creating new profile with Google data:', {
+    email: user.email,
+    firstName,
+    lastName,
+    fullName,
+    metadata: userMetadata
+  })
 
   const { data, error } = await supabase
     .from("profiles")
     .insert({
       id: user.id,
       email: user.email,
-      full_name: user.user_metadata?.full_name || user.user_metadata?.name || "",
-      avatar_url: user.user_metadata?.avatar_url || "",
-      status: "pending", // default when created
+      first_name: firstName,
+      last_name: lastName,
+      full_name: fullName,
+      avatar_url: userMetadata.avatar_url || userMetadata.picture || null,
+      status: "pending",
+      role: "staff",
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .select()
     .single()
@@ -32,6 +73,7 @@ const ensureProfile = async (user: any) => {
     return null
   }
 
+  console.log("Profile created successfully:", data)
   return data
 }
 
@@ -86,6 +128,9 @@ export default function OAuthCallback() {
           setTimeout(() => router.push("/auth/login"), 3000)
           return
         }
+
+        console.log('OAuth user logged in:', session.user)
+        console.log('User metadata:', session.user.user_metadata)
 
         const statusCheck = await checkUserApproval()
         if (!statusCheck.success) {

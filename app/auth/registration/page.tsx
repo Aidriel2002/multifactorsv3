@@ -1,9 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { supabase } from "@/app/lib/supabase/client"
-import { ensureProfile } from "@/app/lib/supabase/profile";
-
+import { ensureProfile } from "@/app/lib/supabase/profile"
 
 interface RegistrationModalProps {
   isOpen: boolean
@@ -20,6 +19,114 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    // Listen for auth state changes to handle OAuth callback
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const user = session.user
+        
+        // Check if this is an OAuth sign-in (Google)
+        if (user.app_metadata.provider === 'google') {
+          console.log('Google OAuth user signed in:', user)
+          console.log('User metadata:', user.user_metadata)
+          console.log('App metadata:', user.app_metadata)
+          
+          try {
+            // Extract names from user metadata
+            const userMetadata = user.user_metadata
+            const fullName = userMetadata.full_name || userMetadata.name || ''
+            const firstName = userMetadata.given_name || fullName.split(' ')[0] || ''
+            const lastName = userMetadata.family_name || fullName.split(' ').slice(1).join(' ') || ''
+            
+            console.log('Extracted names:', { firstName, lastName, fullName })
+            
+            // Check if profile exists, if not create it with proper data
+            const { data: existingProfile, error: fetchError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single()
+            
+            if (fetchError && fetchError.code !== 'PGRST116') {
+              console.error('Error fetching profile:', fetchError)
+            }
+            
+            // Create or update profile with Google data
+            if (!existingProfile) {
+              console.log('Creating new profile with Google data...')
+              const { data: newProfile, error: insertError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: user.id,
+                  email: user.email,
+                  first_name: firstName,
+                  last_name: lastName,
+                  full_name: fullName,
+                  avatar_url: userMetadata.avatar_url || userMetadata.picture || null,
+                  updated_at: new Date().toISOString()
+                })
+                .select()
+                .single()
+              
+              if (insertError) {
+                console.error('Error creating profile:', insertError)
+                throw insertError
+              }
+              
+              console.log('Profile created successfully:', newProfile)
+            } else {
+              console.log('Profile already exists:', existingProfile)
+              
+              // Update profile if names are missing
+              if (!existingProfile.first_name || !existingProfile.last_name) {
+                console.log('Updating profile with Google names...')
+                const { data: updatedProfile, error: updateError } = await supabase
+                  .from('profiles')
+                  .update({
+                    first_name: firstName,
+                    last_name: lastName,
+                    full_name: fullName,
+                    avatar_url: userMetadata.avatar_url || userMetadata.picture || existingProfile.avatar_url,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', user.id)
+                  .select()
+                  .single()
+                
+                if (updateError) {
+                  console.error('Error updating profile:', updateError)
+                }
+                
+                console.log('Profile updated successfully:', updatedProfile)
+              }
+            }
+            
+            setSuccess("Successfully signed in with Google!")
+            
+            // Call success callback
+            if (onSuccess) {
+              setTimeout(() => {
+                onSuccess()
+                handleClose()
+              }, 1500)
+            } else {
+              setTimeout(() => {
+                handleClose()
+              }, 2000)
+            }
+          } catch (err) {
+            console.error('Error creating profile for Google user:', err)
+            setError("Signed in but profile setup failed. Please contact support.")
+          }
+        }
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [onSuccess])
 
   const resetForm = () => {
     setEmail("")
@@ -42,13 +149,11 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
     setLoading(true)
     setError(null)
     setSuccess(null)
-    
 
     try {
       // Validate input
       if (!email.trim() || !password.trim() || !firstName.trim() || !lastName.trim()) {
         setError("All fields are required")
-        setLoading(false)
         return
       }
 
@@ -56,22 +161,18 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email)) {
         setError("Please enter a valid email address")
-        setLoading(false)
         return
       }
-      
 
       // Validate password match
       if (password !== confirmPassword) {
         setError("Passwords don't match")
-        setLoading(false)
         return
       }
 
       // Validate password strength
       if (password.length < 6) {
         setError("Password must be at least 6 characters long")
-        setLoading(false)
         return
       }
 
@@ -94,15 +195,10 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
           data: {
             first_name: cleanFirstName,
             last_name: cleanLastName,
-            full_name: `${cleanFirstName} ${cleanLastName}` // Add full name for better compatibility
+            full_name: `${cleanFirstName} ${cleanLastName}`
           },
         },
       })
-
-      if (data.user) {
-  await ensureProfile(data.user) // 👈 ensures profile row exists
-}
-
 
       if (signUpError) {
         console.error('Supabase signUp error:', signUpError)
@@ -114,18 +210,52 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
           setError("Please enter a valid email address")
         } else if (signUpError.message.includes('Password should be at least')) {
           setError("Password must be at least 6 characters long")
-        } else if (signUpError.message.includes('Database error') || signUpError.message.includes('relation') || signUpError.message.includes('column')) {
+        } else if (signUpError.message.includes('Database error') || 
+                   signUpError.message.includes('relation') || 
+                   signUpError.message.includes('column')) {
           setError("There was a problem creating your account. Please try again later.")
-          // Log the full error for debugging
           console.error('Database error details:', signUpError)
         } else {
           setError(signUpError.message)
         }
-        setLoading(false)
         return
       }
 
-      console.log('User created successfully:', data)
+      // Ensure profile is created (only if user was created successfully)
+      if (data.user) {
+        console.log('User created successfully, now creating profile...')
+        
+        try {
+          const profile = await ensureProfile(data.user)
+          console.log('Profile created/updated successfully:', profile)
+        } catch (profileError) {
+          // Log the actual error
+          console.error('Profile creation error:', {
+            error: profileError,
+            message: profileError instanceof Error ? profileError.message : 'Unknown error',
+            user: { id: data.user.id, email: data.user.email }
+          })
+          
+          // Check if it's an RLS policy error
+          if (profileError instanceof Error) {
+            const errorMsg = profileError.message.toLowerCase()
+            if (errorMsg.includes('policy') || 
+                errorMsg.includes('permission') ||
+                errorMsg.includes('rls') ||
+                errorMsg.includes('row-level security') ||
+                errorMsg.includes('insufficient_privilege')) {
+              setError("Account created but profile setup failed due to permissions. Please contact support.")
+            } else {
+              setError(`Account created but profile setup failed: ${profileError.message}`)
+            }
+          } else {
+            setError("Account created but profile setup incomplete. Please try logging in.")
+          }
+          return
+        }
+      }
+
+      console.log('User and profile created successfully:', data)
 
       // Check if email confirmation is required
       if (data.user && !data.session) {
@@ -147,8 +277,16 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
       }
 
     } catch (err: any) {
-      console.error('Unexpected error during signup:', err)
-      setError("An unexpected error occurred. Please try again.")
+      // Better error logging
+      console.error('Unexpected error during signup:', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        type: typeof err,
+        constructor: err?.constructor?.name,
+        stack: err instanceof Error ? err.stack : undefined
+      })
+      
+      setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -162,18 +300,25 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/pages/multifactors/dashboard`
+          redirectTo: `${window.location.origin}/pages/multifactors/dashboard`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          // Request additional scopes to get profile information
+          scopes: 'email profile'
         }
       })
 
       if (error) {
         console.error('Google OAuth error:', error)
         setError(error.message)
+        setLoading(false)
       }
+      // Keep loading state true while redirecting to Google
     } catch (err: any) {
       console.error('Unexpected Google OAuth error:', err)
       setError("Failed to sign up with Google. Please try again.")
-    } finally {
       setLoading(false)
     }
   }
@@ -240,7 +385,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
                     required
                     disabled={loading}
-                    maxLength={50} // Prevent overly long names
+                    maxLength={50}
                   />
                 </div>
                 <div>
@@ -256,7 +401,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
                     required
                     disabled={loading}
-                    maxLength={50} // Prevent overly long names
+                    maxLength={50}
                   />
                 </div>
               </div>
@@ -274,7 +419,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
                   required
                   disabled={loading}
-                  maxLength={100} // Reasonable email length limit
+                  maxLength={100}
                 />
               </div>
 
