@@ -9,7 +9,7 @@ import {
   where,
   addDoc,
 } from 'firebase/firestore';
-import QuotationPreview from '@/app/multifactors/saved-projects/quotation-preview/page';
+import QuotationPreview from '@/app/multifactors/quotation-list/quotation-preview/page';
 
 type QuotationItem = {
   description: string;
@@ -54,6 +54,11 @@ export default function QuotationListPage() {
     date: '',
     refNo: '',
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [revisionsPage, setRevisionsPage] = useState(1);
+  const [sortOrder, setSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const [revisionsSortOrder, setRevisionsSortOrder] = useState<'recent' | 'oldest'>('recent');
+  const itemsPerPage = 5;
 
   const router = useRouter();
 
@@ -150,6 +155,13 @@ export default function QuotationListPage() {
     return nameMatch || refMatch;
   });
 
+  // Sort filtered groups
+  const sortedGroups = [...filteredGroups].sort((a, b) => {
+    const dateA = new Date(a.original?.date || '').getTime();
+    const dateB = new Date(b.original?.date || '').getTime();
+    return sortOrder === 'recent' ? dateB - dateA : dateA - dateB;
+  });
+
   const allRevisions: RevisionWithOriginal[] = groupedQuotations.flatMap((group) =>
     group.revisions.map((rev) => ({
       ...rev,
@@ -157,6 +169,106 @@ export default function QuotationListPage() {
       originalRef: group.original?.refNo || group.original?.refNumber || '',
     }))
   );
+
+  // Sort revisions
+  const sortedRevisions = [...allRevisions].sort((a, b) => {
+    const dateA = new Date(a.date || '').getTime();
+    const dateB = new Date(b.date || '').getTime();
+    return revisionsSortOrder === 'recent' ? dateB - dateA : dateA - dateB;
+  });
+
+  // Pagination logic for main quotations
+  const totalPages = Math.ceil(sortedGroups.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedGroups = sortedGroups.slice(startIndex, endIndex);
+
+  // Pagination logic for revisions
+  const totalRevisionsPages = Math.ceil(sortedRevisions.length / itemsPerPage);
+  const revisionsStartIndex = (revisionsPage - 1) * itemsPerPage;
+  const revisionsEndIndex = revisionsStartIndex + itemsPerPage;
+  const paginatedRevisions = sortedRevisions.slice(revisionsStartIndex, revisionsEndIndex);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Pagination component
+  const Pagination = ({ 
+    currentPage, 
+    totalPages, 
+    onPageChange 
+  }: { 
+    currentPage: number; 
+    totalPages: number; 
+    onPageChange: (page: number) => void;
+  }) => {
+    const getPageNumbers = () => {
+      const pages: (number | string)[] = [];
+      
+      if (totalPages <= 7) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        pages.push(1);
+        
+        if (currentPage <= 3) {
+          pages.push(2, 3, 4, '...', totalPages);
+        } else if (currentPage >= totalPages - 2) {
+          pages.push('...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+        } else {
+          pages.push('...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages);
+        }
+      }
+      
+      return pages;
+    };
+
+    return (
+      <div className="flex items-center justify-center gap-2 py-4">
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        
+        {getPageNumbers().map((page, index) => (
+          page === '...' ? (
+            <span key={`ellipsis-${index}`} className="px-3 py-2 text-slate-400">...</span>
+          ) : (
+            <button
+              key={page}
+              onClick={() => onPageChange(page as number)}
+              className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+                currentPage === page
+                  ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {page}
+            </button>
+          )
+        ))}
+        
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <>
    <div className="min-h-screen  p-4 md:p-8">
@@ -179,8 +291,8 @@ export default function QuotationListPage() {
   </div>
   <p className="text-black ml-11">Manage and view all your quotations</p>
 </div>
-      <div className="mb-8">
-        <div className="relative max-w-md">
+      <div className="mb-8 flex items-center gap-4">
+        <div className="relative max-w-md flex-1">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -193,6 +305,28 @@ export default function QuotationListPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-3 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 placeholder:text-slate-400"
           />
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-600">Sort:</span>
+          <button
+            onClick={() => {
+              setSortOrder(sortOrder === 'recent' ? 'oldest' : 'recent');
+              setCurrentPage(1);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-3 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl shadow-sm hover:bg-slate-50 transition-all duration-200"
+          >
+            <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {sortOrder === 'recent' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+              )}
+            </svg>
+            <span className="text-sm font-medium text-slate-700">
+              {sortOrder === 'recent' ? 'Recent First' : 'Oldest First'}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -237,7 +371,7 @@ export default function QuotationListPage() {
                   </td>
                 </tr>
               ) : (
-                filteredGroups.map((group) => (
+                paginatedGroups.map((group) => (
                   <React.Fragment key={group.original?.id || group.revisions[0]?.id}>
                     {/* Original */}
                     
@@ -275,7 +409,7 @@ export default function QuotationListPage() {
                               View
                             </button>
                             <button
-                              onClick={() => group.original?.id && router.push(`/multifactors/saved-projects/revise-quotation?id=${group.original.id}`)}
+                              onClick={() => group.original?.id && router.push(`/multifactors/quotation-list/revise-quotation?id=${group.original.id}`)}
                               className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg hover:from-amber-600 hover:to-orange-700 transition-all duration-200 shadow-md hover:shadow-lg font-medium text-sm"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -294,12 +428,40 @@ export default function QuotationListPage() {
             </tbody>
           </table>
         </div>
+        
+        {filteredGroups.length > 0 && (
+          <Pagination 
+            currentPage={currentPage} 
+            totalPages={totalPages} 
+            onPageChange={setCurrentPage} 
+          />
+        )}
       </div>
 
       {/* Revisions Table */}
       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 overflow-hidden mt-8">
+        <div className="px-6 pt-6 pb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-purple-700">Quotation Revisions</h2>
+          <button
+            onClick={() => {
+              setRevisionsSortOrder(revisionsSortOrder === 'recent' ? 'oldest' : 'recent');
+              setRevisionsPage(1);
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg shadow-sm hover:bg-purple-100 transition-all duration-200"
+          >
+            <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {revisionsSortOrder === 'recent' ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+              )}
+            </svg>
+            <span className="text-sm font-medium text-purple-700">
+              {revisionsSortOrder === 'recent' ? 'Recent' : 'Oldest'}
+            </span>
+          </button>
+        </div>
         <div className="hidden md:block overflow-x-auto">
-          <h2 className="px-6 pt-6 pb-2 text-lg font-bold text-purple-700">Quotation Revisions</h2>
           <table className="w-full">
             <thead className="bg-gradient-to-r from-purple-50 to-purple-100 border-b border-purple-200">
               <tr>
@@ -331,7 +493,7 @@ export default function QuotationListPage() {
                   </td>
                 </tr>
               ) : (
-                allRevisions.map((rev) => (
+                paginatedRevisions.map((rev) => (
                   <tr key={rev.id} className="hover:bg-purple-50 transition-colors duration-150">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
@@ -375,6 +537,14 @@ export default function QuotationListPage() {
             </tbody>
           </table>
         </div>
+        
+        {allRevisions.length > 0 && (
+          <Pagination 
+            currentPage={revisionsPage} 
+            totalPages={totalRevisionsPages} 
+            onPageChange={setRevisionsPage} 
+          />
+        )}
       </div>
 
       {selectedQuotation && (

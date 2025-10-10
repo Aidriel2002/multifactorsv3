@@ -3,6 +3,7 @@
 import Image from "next/image"
 import { useState, useEffect } from 'react'
 import { supabase } from '@/app/lib/supabase/client'
+import { createActivityLog } from '@/app/lib/supabase/activityLogs'
 import {
     Users,
     Shield,
@@ -55,6 +56,18 @@ export default function UserRoleManagement() {
     const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
     const [showUserModal, setShowUserModal] = useState(false)
     const [updating, setUpdating] = useState<string | null>(null)
+    const [currentAdminId, setCurrentAdminId] = useState<string | null>(null)
+
+    useEffect(() => {
+        // Get current admin user
+        const getCurrentAdmin = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                setCurrentAdminId(user.id)
+            }
+        }
+        getCurrentAdmin()
+    }, [])
 
     const fetchUsers = async () => {
         try {
@@ -129,11 +142,33 @@ export default function UserRoleManagement() {
 
             if (error) throw error
 
+            // Find the user being updated
+            const updatedUser = users.find(u => u.id === userId)
+
+            // Update local state
             setUsers(users.map(user =>
                 user.id === userId
                     ? { ...user, status, updated_at: new Date().toISOString() }
                     : user
             ))
+
+            // Log the activity if user was approved and we have the admin ID
+            if (status === 'approved' && currentAdminId && updatedUser) {
+                await createActivityLog({
+                    userId: currentAdminId,
+                    action: 'User Approved',
+                    details: `Approved user: ${updatedUser.first_name} ${updatedUser.last_name} (${updatedUser.email})`,
+                })
+            }
+
+            // Log rejection as well
+            if (status === 'rejected' && currentAdminId && updatedUser) {
+                await createActivityLog({
+                    userId: currentAdminId,
+                    action: 'User Rejected',
+                    details: `Rejected user: ${updatedUser.first_name} ${updatedUser.last_name} (${updatedUser.email})`,
+                })
+            }
 
             await sendStatusUpdateNotification(userId, status)
 
@@ -158,11 +193,23 @@ export default function UserRoleManagement() {
 
             if (error) throw error
 
+            // Find the user being updated
+            const updatedUser = users.find(u => u.id === userId)
+
             setUsers(users.map(user =>
                 user.id === userId
                     ? { ...user, role, updated_at: new Date().toISOString() }
                     : user
             ))
+
+            // Log role change
+            if (currentAdminId && updatedUser) {
+                await createActivityLog({
+                    userId: currentAdminId,
+                    action: 'User Role Changed',
+                    details: `Changed ${updatedUser.first_name} ${updatedUser.last_name}'s role to ${role}`,
+                })
+            }
 
         } catch (error) {
             console.error('Error updating user role:', error)
@@ -590,28 +637,6 @@ export default function UserRoleManagement() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div>
-                                        <h4 className="font-medium text-gray-900 mb-3">Contact Information</h4>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center">
-                                                <Mail className="w-4 h-4 text-gray-400 mr-3" />
-                                                <span className="text-sm text-gray-600">{selectedUser.email}</span>
-                                            </div>
-                                            {selectedUser.phone && (
-                                                <div className="flex items-center">
-                                                    <Phone className="w-4 h-4 text-gray-400 mr-3" />
-                                                    <span className="text-sm text-gray-600">{selectedUser.phone}</span>
-                                                </div>
-                                            )}
-                                            {selectedUser.address && (
-                                                <div className="flex items-start">
-                                                    <MapPin className="w-4 h-4 text-gray-400 mr-3 mt-0.5" />
-                                                    <span className="text-sm text-gray-600">{selectedUser.address}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div>
                                         <h4 className="font-medium text-gray-900 mb-3">Account Information</h4>
                                         <div className="space-y-3">
                                             <div className="flex items-center">
@@ -641,5 +666,4 @@ export default function UserRoleManagement() {
                 )}
             </div>
         </div>
-    )
-}
+    )}

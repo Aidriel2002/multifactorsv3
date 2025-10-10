@@ -37,19 +37,19 @@ const baseMenuItems: MenuItem[] = [
     icon: FolderOpen
   },
   {
-    name: 'Saved Projects',
+    name: 'Manage Projects',
     href: '/multifactors/saved-projects',
     icon: BookmarkCheck
+  },
+  {
+    name: 'Manage Quotations',
+    href: '/multifactors/quotation-list',
+    icon: ShoppingCart
   },
   {
     name: 'Suppliers & Customers',
     href: '/multifactors/suppliers-customers',
     icon: Users
-  },
-  {
-    name: 'Purchased Order',
-    href: '/multifactors/purchased-order',
-    icon: ShoppingCart
   },
   {
     name: 'Activity Logs',

@@ -181,9 +181,19 @@ export default function ProjectPage() {
   return (
     <>
     <div className="max-w-4xl mx-auto pt-15 ">
+      <button
+  onClick={() => router.push('/multifactors/projects')}
+  className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+>
+  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+  Back to Projects
+</button>
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-50 to-blue-50 border-l-4 border-blue-500 p-6 rounded-lg shadow-sm mb-8">
         <div className="flex items-center justify-between">
+          
           <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">New Project</h2>
             <p className="text-gray-600 text-sm">Create a new project and generate quotation</p>

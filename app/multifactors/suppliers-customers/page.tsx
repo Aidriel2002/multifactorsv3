@@ -9,6 +9,9 @@ import { createActivityLog } from '@/app/lib/supabase/activityLogs'
 export default function AdminSupplierCustomerPage() {
   const [contacts, setContacts] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
   const [formData, setFormData] = useState({
     name: '',
     position: '',
@@ -16,6 +19,8 @@ export default function AdminSupplierCustomerPage() {
     contactNumber: '',
     type: 'customer'
   });
+
+  const itemsPerPage = 10;
 
   // Fetch data from Firestore
   const fetchData = async () => {
@@ -34,8 +39,44 @@ export default function AdminSupplierCustomerPage() {
       type: 'customer' 
     }));
 
-    // Merge both arrays and sort by name
-    const allContacts = [...supplierData, ...customerData].sort((a, b) => 
+    // Create a map to track contacts by name for detecting duplicates
+    const contactMap = new Map();
+
+    // Process customers
+    customerData.forEach(contact => {
+      const key = contact.name?.toLowerCase().trim();
+      if (key) {
+        contactMap.set(key, {
+          ...contact,
+          ids: [contact.id],
+          types: ['customer']
+        });
+      }
+    });
+
+    // Process suppliers and merge with customers if same name
+    supplierData.forEach(contact => {
+      const key = contact.name?.toLowerCase().trim();
+      if (key) {
+        if (contactMap.has(key)) {
+          // Contact exists as customer, mark as both
+          const existing = contactMap.get(key);
+          existing.types.push('supplier');
+          existing.ids.push(contact.id);
+          existing.type = 'both';
+        } else {
+          // New supplier only
+          contactMap.set(key, {
+            ...contact,
+            ids: [contact.id],
+            types: ['supplier']
+          });
+        }
+      }
+    });
+
+    // Convert map to array and sort by name
+    const allContacts = Array.from(contactMap.values()).sort((a, b) => 
       a.name?.localeCompare(b.name) || 0
     );
     
@@ -46,25 +87,43 @@ export default function AdminSupplierCustomerPage() {
   const addContact = async () => {
     if (!formData.name.trim()) return;
 
-    const collectionName = formData.type === 'customer' ? 'customers' : 'suppliers';
-    
-    const docRef = await addDoc(collection(db, collectionName), {
+    const contactData = {
       name: formData.name.trim(),
       position: formData.position.trim(),
       address: formData.address.trim(),
       contactNumber: formData.contactNumber.trim(),
       createdAt: serverTimestamp()
-    });
+    };
+
+    let docIds = [];
+
+    // Handle 'both' type - add to both collections
+    if (formData.type === 'both') {
+      const customerRef = await addDoc(collection(db, 'customers'), contactData);
+      const supplierRef = await addDoc(collection(db, 'suppliers'), contactData);
+      docIds = [customerRef.id, supplierRef.id];
+    } else {
+      // Add to single collection
+      const collectionName = formData.type === 'customer' ? 'customers' : 'suppliers';
+      const docRef = await addDoc(collection(db, collectionName), contactData);
+      docIds = [docRef.id];
+    }
 
     // Log activity (best-effort)
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
+        const actionText = formData.type === 'customer' 
+          ? 'Added customer' 
+          : formData.type === 'supplier'
+          ? 'Added supplier'
+          : 'Added customer/supplier';
+        
         await createActivityLog({
           userId: user.id,
-          action: formData.type === 'customer' ? 'Added customer' : 'Added supplier',
-          details: `${formData.type} ${formData.name.trim()} created (id: ${docRef.id})`,
-          metadata: { collection: collectionName }
+          action: actionText,
+          details: `${formData.type === 'both' ? 'Customer/Supplier' : formData.type} ${formData.name.trim()} created (ids: ${docIds.join(', ')})`,
+          metadata: { type: formData.type, ids: docIds }
         })
       }
     } catch (e) {
@@ -80,6 +139,7 @@ export default function AdminSupplierCustomerPage() {
       type: 'customer'
     });
     setShowModal(false);
+    setCurrentPage(1); // Reset to first page
     fetchData();
   };
 
@@ -94,6 +154,36 @@ export default function AdminSupplierCustomerPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Filter and search logic
+  const filteredContacts = contacts.filter(contact => {
+    // Filter by type
+    const matchesType = filterType === 'all' || contact.type === filterType;
+    
+    // Search by name, position, address, or contact number
+    const matchesSearch = searchTerm === '' || 
+      contact.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.contactNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesType && matchesSearch;
+  });
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredContacts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentContacts = filteredContacts.slice(startIndex, endIndex);
+
+  const goToPage = (page) => {
+    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  // Reset to first page when search or filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterType]);
 
   return (
     <>
@@ -119,6 +209,63 @@ export default function AdminSupplierCustomerPage() {
           </button>
         </div>
 
+        <div className="bg-white rounded-xl p-4 mb-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <svg 
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search by name, position, address, or contact number..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Dropdown */}
+            <div className="w-full md:w-48">
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Types</option>
+                <option value="customer">Customer Only</option>
+                <option value="supplier">Supplier Only</option>
+                <option value="both">Customer/Supplier</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Results Summary */}
+          {(searchTerm || filterType !== 'all') && (
+            <div className="mt-3 text-sm text-gray-600">
+              Found {filteredContacts.length} contact{filteredContacts.length !== 1 ? 's' : ''}
+              {searchTerm && ` matching "${searchTerm}"`}
+              {filterType !== 'all' && ` in ${filterType === 'both' ? 'Customer/Supplier' : filterType} category`}
+            </div>
+          )}
+        </div>
+
         {/* Main Table */}
         <div className="bg-white rounded-xl shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
@@ -133,8 +280,8 @@ export default function AdminSupplierCustomerPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {contacts.length > 0 ? (
-                  contacts.map((contact) => (
+                {currentContacts.length > 0 ? (
+                  currentContacts.map((contact) => (
                     <tr key={contact.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">
                         {contact.name}
@@ -152,9 +299,11 @@ export default function AdminSupplierCustomerPage() {
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                           contact.type === 'customer' 
                             ? 'bg-green-100 text-green-800' 
-                            : 'bg-blue-100 text-blue-800'
+                            : contact.type === 'supplier'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-purple-100 text-purple-800'
                         }`}>
-                          {contact.type === 'customer' ? 'Customer' : 'Supplier'}
+                          {contact.type === 'customer' ? 'Customer' : contact.type === 'supplier' ? 'Supplier' : 'Customer/Supplier'}
                         </span>
                       </td>
                     </tr>
@@ -162,13 +311,72 @@ export default function AdminSupplierCustomerPage() {
                 ) : (
                   <tr>
                     <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                      No contacts found. Click "Add New Contact" to get started.
+                      {contacts.length === 0 
+                        ? 'No contacts found. Click "Add New Contact" to get started.' 
+                        : filteredContacts.length === 0
+                        ? 'No contacts match your search or filter criteria.'
+                        : 'No contacts on this page.'}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredContacts.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredContacts.length)} of {filteredContacts.length} contacts
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Previous
+                </button>
+                
+                {[...Array(totalPages)].map((_, index) => {
+                  const page = index + 1;
+                  if (
+                    page === 1 || 
+                    page === totalPages || 
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => goToPage(page)}
+                        className={`px-3 py-1 rounded-lg transition-colors ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    page === currentPage - 2 || 
+                    page === currentPage + 2
+                  ) {
+                    return <span key={page} className="px-2 text-gray-500">...</span>;
+                  }
+                  return null;
+                })}
+
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Add Contact Modal */}
@@ -193,6 +401,7 @@ export default function AdminSupplierCustomerPage() {
                   >
                     <option value="customer">Customer</option>
                     <option value="supplier">Supplier</option>
+                    <option value="both">Customer/Supplier</option>
                   </select>
                 </div>
 

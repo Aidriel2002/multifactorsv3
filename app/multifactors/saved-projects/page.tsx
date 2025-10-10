@@ -161,7 +161,6 @@ export default function SaveProjectsPage() {
       };
       
       await updateDoc(projectRef, updateData);
-      // Log activity (best-effort)
       try {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
@@ -176,7 +175,6 @@ export default function SaveProjectsPage() {
         console.warn('Activity log failed for admin remarks update', e)
       }
       
-      // Update local state
       setProjects(prev => prev.map(p => 
         p.id === projectForRemarks.id 
           ? { ...p, ...updateData }
@@ -223,7 +221,6 @@ export default function SaveProjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  // Pagination calculations
   const totalPages = Math.ceil(filteredProjects.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
@@ -241,7 +238,6 @@ export default function SaveProjectsPage() {
     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
@@ -265,11 +261,10 @@ export default function SaveProjectsPage() {
     );
   };
 
-  // Show loading while checking admin status
   if (adminLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 mx-auto">
-        <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="container mx-auto max-w-7xl">
           <div className="flex justify-center items-center min-h-[400px]">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
@@ -281,8 +276,7 @@ export default function SaveProjectsPage() {
   return (
      <>
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 mx-auto">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* Header Section */}
+      <div className="container mx-auto max-w-7xl">
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -312,10 +306,8 @@ export default function SaveProjectsPage() {
           </div>
         </div>
 
-        {/* Search and Filter Section */}
         <div className="mb-8 space-y-4">
           <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
             <div className="relative flex-1 max-w-2xl">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <svg className="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,10 +316,10 @@ export default function SaveProjectsPage() {
               </div>
               <input
                 type="text"
-                placeholder="Search by Reference No., Project Name, or Customer"
+                placeholder="Search..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 text-lg border-0 rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:bg-white transition-all duration-300 placeholder-slate-500"
+                className="w-full pl-7 pr-2 py-2 text-lg border-0 rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:bg-white transition-all duration-300 placeholder-slate-500"
               />
               {searchTerm && (
                 <button
@@ -341,13 +333,12 @@ export default function SaveProjectsPage() {
               )}
             </div>
 
-            {/* Status Filter - Only show for admins */}
             {isAdmin && (
               <div className="w-full md:w-64">
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full py-4 px-4 text-lg border-0 rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:bg-white transition-all duration-300"
+                  className="w-full py-2 px-4 text-lg border-0 rounded-2xl bg-white/80 backdrop-blur-sm shadow-lg shadow-slate-200/50 focus:outline-none focus:ring-4 focus:ring-blue-500/20 focus:bg-white transition-all duration-300"
                 >
                   <option value="all">All Status</option>
                   <option value="">No Status</option>
@@ -517,20 +508,7 @@ export default function SaveProjectsPage() {
           </div>
         )}
 
-        {/* Stats Footer */}
-        {filteredProjects.length > 0 && (
-          <div className="mt-8 text-center">
-            <div className="inline-flex items-center space-x-2 bg-white/60 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-white/50">
-              <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 00-2-2z" />
-              </svg>
-              <span className="text-slate-700 font-medium">
-                Showing {startIndex + 1}-{Math.min(endIndex, filteredProjects.length)} of {filteredProjects.length} projects
-                {statusFilter !== 'all' && ` (${statusFilter} filter applied)`}
-              </span>
-            </div>
-          </div>
-        )}
+        
 
         {/* Project Details Modal */}
         {showModal && selectedProject && (

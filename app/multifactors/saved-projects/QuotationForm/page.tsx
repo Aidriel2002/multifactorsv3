@@ -12,6 +12,7 @@ import {
   limit
 } from 'firebase/firestore';
 import { useRouter } from 'next/navigation';
+import { logQuotationCreated } from '@/app/lib/supabase/activityLogs';
 
 interface QuotationItem {
   qty: string;
@@ -45,7 +46,7 @@ interface FormDataType {
   grandTotal: string;
   date: string;
   projectId?: string;
- projectRef?: string;
+  projectRef?: string;
 }
 
 export default function QuotationForm() {
@@ -53,6 +54,7 @@ export default function QuotationForm() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [showProjectDropdown, setShowProjectDropdown] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const router = useRouter();
   const [refNo, setRefNo] = useState('');
   
@@ -71,7 +73,6 @@ export default function QuotationForm() {
     projectRef: '',
   });
 
-  // Load projects from Firebase
   useEffect(() => {
     const loadProjects = async () => {
       try {
@@ -92,7 +93,6 @@ export default function QuotationForm() {
     loadProjects();
   }, []);
 
-  // Generate reference number
   useEffect(() => {
     const generateRefNo = async () => {
       const now = new Date();
@@ -125,32 +125,31 @@ export default function QuotationForm() {
     generateRefNo();
   }, []);
 
-  // Handle project selection
-const handleProjectSelect = (projectId: string) => {
-  const selectedProject = projects.find(p => p.id === projectId);
-  if (selectedProject) {
-    // ✅ Only allow approved projects
-    if (selectedProject.adminStatus !== 'approved') {
-      alert('This project is not approved. You cannot create a quotation for it.');
-      setSelectedProjectId('');
-      setShowProjectDropdown(false);
-      return;
-    }
+  const handleProjectSelect = (projectId: string) => {
+    const selectedProject = projects.find(p => p.id === projectId);
+    if (selectedProject) {
+      if (selectedProject.adminStatus !== 'approved') {
+        alert('This project is not approved. You cannot create a quotation for it.');
+        setSelectedProjectId('');
+        setShowProjectDropdown(false);
+        return;
+      }
 
-    setFormData((prev) => ({
-      ...prev,
-      name: selectedProject.clientName || '',
-      position: selectedProject.clientPosition || '',
-      address: selectedProject.clientAddress || '',
-      subject: selectedProject.projectName || '',
-      description: selectedProject.description || '',
-      projectId: projectId,
-      projectRef: selectedProject.refNo || '',
-    }));
-    setSelectedProjectId(projectId);
-  }
-  setShowProjectDropdown(false);
-};
+      setFormData((prev) => ({
+        ...prev,
+        name: selectedProject.clientName || '',
+        position: selectedProject.clientPosition || '',
+        address: selectedProject.clientAddress || '',
+        subject: selectedProject.projectName || '',
+        description: selectedProject.description || '',
+        projectId: projectId,
+        projectRef: selectedProject.refNo || '',
+      }));
+      setSelectedProjectId(projectId);
+    }
+    setShowProjectDropdown(false);
+  };
+
   // Clear project selection
   const handleClearProject = () => {
     setSelectedProjectId('');
@@ -163,7 +162,7 @@ const handleProjectSelect = (projectId: string) => {
       subject: '',
       description: '',
       projectId: undefined,
-      projectRefNo: '',
+      projectRef: '',
     }));
   };
   
@@ -238,31 +237,47 @@ const handleProjectSelect = (projectId: string) => {
     }
   };
 
-  // Submit quotation
-const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
-  if (selectedProjectId) {
-    const selectedProject = projects.find(p => p.id === selectedProjectId);
-    if (selectedProject && selectedProject.adminStatus !== 'approved') {
-      alert('You cannot create a quotation because the selected project is not approved.');
-      return;
+    if (selectedProjectId) {
+      const selectedProject = projects.find(p => p.id === selectedProjectId);
+      if (selectedProject && selectedProject.adminStatus !== 'approved') {
+        alert('You cannot create a quotation because the selected project is not approved.');
+        return;
+      }
     }
-  }
 
-  const submissionData = {
-    ...formData,
-    refNo,
-    createdAt: Timestamp.now(),
-    items: useItems ? formData.items : [],
-    projectRefNo: formData.projectRef || null,  
+    setIsSubmitting(true);
+
+    try {
+      const submissionData = {
+        ...formData,
+        refNo,
+        createdAt: Timestamp.now(),
+        items: useItems ? formData.items : [],
+        projectRefNo: formData.projectRef || null,
+      };
+
+      await addDoc(collection(db, 'quotations'), submissionData);
+
+      await logQuotationCreated({
+        refNo: refNo,
+        clientName: formData.name,
+        subject: formData.subject,
+        grandTotal: formData.grandTotal,
+        projectRef: formData.projectRef
+      });
+
+      alert('Quotation saved successfully!');
+      router.push('/multifactors/quotation-list');
+    } catch (error) {
+      console.error('Error saving quotation:', error);
+      alert('Failed to save quotation. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  await addDoc(collection(db, 'quotations'), submissionData);
-  alert('Quotation saved!');
-  router.push('/multifactors/saved-projects/quotation-list');
-};
-
 
   const handleRemoveItem = (index: number) => {
     setFormData((prev) => ({
@@ -278,19 +293,26 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     }));
   };
 
-
   return (
-    
     <>
-    <div className="min-h-screen  p-4 md:p-8">
-      {/* Background Elements */}
+    <div className="min-h-screen p-4 md:p-8">
+      
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-tr from-violet-500/5 to-pink-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
       </div>
         
       <div className="relative max-w-5xl mx-auto">
+        <button
+          onClick={() => router.push('/multifactors/projects')}
+          className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+        >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Projects
+        </button>
+
         {/* Header Section */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden mb-8">
           <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 px-6 md:px-8 py-6">
@@ -331,17 +353,18 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                     </div>
                   </div>
                 </div>
-                  <div className="space-y-2">
-    <label className="block text-sm font-medium text-gray-700">
-      Project Reference No.
-    </label>
-    <input
-      type="text"
-       value={formData.projectRef || ""}
-      readOnly
-      className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 font-mono text-sm"
-    />
-  </div>
+                
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Project Reference No.
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.projectRef || ""}
+                    readOnly
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 font-mono text-sm"
+                  />
+                </div>
                 
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-gray-700">Date</label>
@@ -540,13 +563,12 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
-  type="checkbox"
-  id="useItems"
-  checked={useItems}
-  onChange={(e) => setUseItems(e.target.checked)}
-  className="sr-only peer"
-/>
-
+                      type="checkbox"
+                      id="useItems"
+                      checked={useItems}
+                      onChange={(e) => setUseItems(e.target.checked)}
+                      className="sr-only peer"
+                    />
                     <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     <span className="ml-3 text-sm font-medium text-gray-700">Include Items Section</span>
                   </label>
@@ -563,7 +585,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                 </h2>
                 
                 <div className="bg-gray-50 rounded-xl p-4 md:p-6 border border-gray-200">
-                  {/* Desktop Headers */}
                   <div className="hidden md:grid md:grid-cols-5 gap-4 mb-4 px-2">
                     <div className="text-sm font-medium text-gray-600">Quantity</div>
                     <div className="text-sm font-medium text-gray-600">Description</div>
@@ -575,9 +596,6 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
                   <div className="space-y-4">
                     {formData.items.map((item, index) => (
                       <div key={index} className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-                       
-                          
-                        {/* Desktop Layout */}
                         <div className="hidden md:grid md:grid-cols-5 gap-4 items-center">
                           <input
                             type="text"
@@ -701,17 +719,31 @@ const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
             <div className="flex flex-col sm:flex-row gap-4 sm:justify-end">
               <button
                 type="button"
-                onClick={() => router.push('/multifactors/saved-projects/quotation-list')}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                onClick={() => router.push('/multifactors/quotation-list')}
+                disabled={isSubmitting}
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                disabled={isSubmitting}
+                className="px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>💾</span>
-                <span>Submit Quotation</span>
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>💾</span>
+                    <span>Submit Quotation</span>
+                  </>
+                )}
               </button>
             </div>
           </form>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import RegistrationModal from "@/app/auth/registration/page"
 import { ensureProfile } from "@/app/lib/supabase/profile";
 import { createActivityLog } from '@/app/lib/supabase/activityLogs'
+import { getGoogleOAuthConfig, debugOAuthConfig } from '@/app/utils/oauth-config'
 
 const updateLastActive = async () => {
   try {
@@ -124,7 +125,6 @@ export default function LoginPage() {
   const [resendMessage, setResendMessage] = useState<string | null>(null)
   const router = useRouter()
 
-  // Check for OAuth errors in URL on component mount
   useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -133,10 +133,32 @@ export default function LoginPage() {
       
       if (errorDescription) {
         setError(decodeURIComponent(errorDescription))
-        // Clean up URL
         window.history.replaceState({}, '', window.location.pathname)
       } else if (errorCode) {
-        setError('An error occurred during Google sign-in. Please try again.')
+        // Handle middleware redirect errors
+        switch (errorCode) {
+          case 'email_not_confirmed':
+            setError('Please check your email and click the confirmation link before logging in.')
+            setShowResendConfirmation(true)
+            break
+          case 'profile_not_found':
+            setError('User profile not found. Please contact support.')
+            break
+          case 'account_rejected':
+            setError('Your account has been rejected. Please contact support.')
+            break
+          case 'account_pending':
+            setError('Your account is pending approval. Please wait for an administrator to approve your account.')
+            break
+          case 'access_denied':
+            setError('Access denied. You do not have permission to access that area.')
+            break
+          case 'auth_error':
+            setError('Authentication error. Please try logging in again.')
+            break
+          default:
+            setError('An error occurred during Google sign-in. Please try again.')
+        }
         window.history.replaceState({}, '', window.location.pathname)
       }
     }
@@ -213,7 +235,7 @@ export default function LoginPage() {
         }
       }
 
-      router.push("/multifactors")
+      router.push("/multifactors/dashboard")
       
     } catch (error) {
       console.error('Login error:', error)
@@ -228,24 +250,26 @@ export default function LoginPage() {
     setError(null)
     
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/oauth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
-        }
-      })
+      // Debug OAuth configuration
+      debugOAuthConfig()
+      
+      // Get OAuth configuration
+      const oauthConfig = getGoogleOAuthConfig()
+      
+      console.log('🔐 Starting Google OAuth with config:', oauthConfig)
+      
+      const { data, error } = await supabase.auth.signInWithOAuth(oauthConfig)
       
       if (error) {
+        console.error('Google OAuth error:', error)
         setError(error.message)
         setLoading(false)
         return
       }
 
-      // OAuth will redirect, so loading state will persist until redirect
+      console.log('Google OAuth initiated successfully:', data)
+      // Don't set loading to false here as the user will be redirected
+
     } catch (error: any) {
       console.error('Google login error:', error)
       setError(error.message || 'An unexpected error occurred during Google sign-in')

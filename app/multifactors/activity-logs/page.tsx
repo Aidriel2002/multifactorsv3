@@ -65,6 +65,67 @@ export default function ActivityLogsPage() {
     if (currentPage > totalPages) setCurrentPage(1)
   }, [logs, currentPage, totalPages])
 
+  // Format details to remove ALL ID references and show only meaningful names
+  const formatDetails = (details: string | null) => {
+    if (!details) return '-'
+    
+    let formatted = details
+    
+    // Remove any UUID patterns (8-4-4-4-12 format)
+    formatted = formatted.replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '')
+    
+    // Remove "ID:" or "id:" followed by anything
+    formatted = formatted.replace(/\bid:?\s*[^\s,|]+/gi, '')
+    
+    // Remove standalone IDs that might be numeric
+    formatted = formatted.replace(/\b[a-f0-9]{20,}\b/gi, '')
+    
+    // Remove prefixes but keep the actual names
+    formatted = formatted.replace(/Project\s+ID:\s*/gi, '')
+    formatted = formatted.replace(/Quotation\s+ID:\s*/gi, '')
+    formatted = formatted.replace(/Client\s+ID:\s*/gi, '')
+    formatted = formatted.replace(/User\s+ID:\s*/gi, '')
+    formatted = formatted.replace(/Quote\s+ID:\s*/gi, '')
+    formatted = formatted.replace(/Subject:\s*/gi, '')
+    formatted = formatted.replace(/Name:\s*/gi, '')
+    
+    // Clean up separators and extra whitespace
+    formatted = formatted.replace(/[\s,|;\-]+/g, ' ')
+    formatted = formatted.replace(/\s+/g, ' ')
+    formatted = formatted.trim()
+    
+    // If nothing is left after cleanup, return dash
+    if (!formatted || formatted.length < 2) return '-'
+    
+    return formatted
+  }
+
+  // Generate pagination with max 3 page numbers shown, rest as "..."
+  const getPaginationButtons = () => {
+    const buttons: (number | string)[] = []
+    
+    if (totalPages <= 3) {
+      // Show all pages if 3 or fewer
+      for (let i = 1; i <= totalPages; i++) {
+        buttons.push(i)
+      }
+    } else {
+      // More than 3 pages - only show 3 numbers max, replace rest with "..."
+      if (currentPage <= 2) {
+        // At the start: show first 3 pages, then ...
+        buttons.push(1, 2, 3, '...')
+      } else if (currentPage >= totalPages - 1) {
+        // At the end: show ..., then last 3 pages
+        buttons.push('...', totalPages - 2, totalPages - 1, totalPages)
+      } else {
+        // In the middle: ... current-1 [current] current+1 ...
+        buttons.push('...', currentPage - 1, currentPage, currentPage + 1, '...')
+      }
+    }
+    
+    return buttons
+  }
+
   return (
     <div className="p-6">
       <h1 className="text-2xl font-semibold mb-4">Activity Logs</h1>
@@ -86,7 +147,7 @@ export default function ActivityLogsPage() {
             <tbody>
               {logs.length === 0 && (
                 <tr>
-                  <td className="px-4 py-3 text-gray-500" colSpan={3}>No activity yet.</td>
+                  <td className="px-4 py-3 text-gray-500" colSpan={4}>No activity yet.</td>
                 </tr>
               )}
               {pageLogs.map((log) => (
@@ -107,7 +168,7 @@ export default function ActivityLogsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">{log.action}</td>
-                  <td className="px-4 py-3 text-gray-600">{log.details || '-'}</td>
+                  <td className="px-4 py-3 text-gray-600">{formatDetails(log.details)}</td>
                 </tr>
               ))}
             </tbody>
@@ -122,26 +183,33 @@ export default function ActivityLogsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
             >
               Previous
             </button>
             <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 7).map((p) => (
-                <button
-                  key={p}
-                  className={`px-3 py-1 border rounded ${p === currentPage ? 'bg-gray-100 font-medium' : ''}`}
-                  onClick={() => setCurrentPage(p)}
-                >
-                  {p}
-                </button>
+              {getPaginationButtons().map((page, index) => (
+                typeof page === 'number' ? (
+                  <button
+                    key={page}
+                    className={`px-3 py-1 border rounded hover:bg-gray-50 ${
+                      page === currentPage ? 'bg-blue-500 text-white font-medium' : ''
+                    }`}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </button>
+                ) : (
+                  <span key={`ellipsis-${index}`} className="px-2 text-gray-400">
+                    {page}
+                  </span>
+                )
               ))}
-              {totalPages > 7 && <span className="px-2">…</span>}
             </div>
             <button
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
             >
@@ -153,5 +221,3 @@ export default function ActivityLogsPage() {
     </div>
   )
 }
-
-

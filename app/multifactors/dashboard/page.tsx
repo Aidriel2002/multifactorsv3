@@ -10,14 +10,8 @@ import {
   orderBy,
   limit,
 } from 'firebase/firestore';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/app/lib/supabase/client';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Define quotation type
 interface Quotation {
   id: string;
   refNo?: string;
@@ -59,7 +53,6 @@ export default function AdminDashboard() {
         const pendingSnapshot = await getDocs(pendingQuery);
         setPendingApprovals(pendingSnapshot.size);
 
-        // Fetch users from Supabase
         const { data: usersData, count, error: usersError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact' });

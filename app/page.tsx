@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState} from 'react';
 import { Users, Zap, Shield, ArrowRight, Github, Linkedin, Mail, Phone, MapPin, Facebook } from 'lucide-react';
 import Navbar from '@/app/components/Navbar';
 import Image from "next/image";
@@ -11,7 +11,6 @@ import LoginPage from '@/app/auth/login/page';
 import Modal from '@/app/components/Modal'
 
 
-// About Section Component
 const About = () => {
   const features = [
     { icon: <Zap className="w-8 h-8" />, title: "Lightning Fast", description: "Optimized for speed and performance" },
@@ -75,7 +74,6 @@ const About = () => {
   );
 };
 
-// Projects Section Component
 const Projects = () => {
   const projects = [
     {
@@ -159,7 +157,6 @@ const Projects = () => {
   );
 };
 
-// Contact Section Component
 const Contact = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -215,7 +212,6 @@ const handleSubmit = async (e: React.FormEvent) => {
             <h3 className="text-2xl font-semibold text-gray-900 mb-6">Contact Information</h3>
             
             <div className="space-y-6">
-  {/* Email */}
   <a 
     href="mailto:multifactorssales@gmail.com" 
     className="flex items-center hover:opacity-80 transition"
@@ -229,7 +225,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     </div>
   </a>
 
-  {/* Phone */}
   <a 
     href="tel:09177113478" 
     className="flex items-center hover:opacity-80 transition"
@@ -243,7 +238,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     </div>
   </a>
 
-  {/* Location */}
   <a 
     href="https://www.google.com/maps/place/Multifactors+Sales/@8.2239033,124.250122,17.25z/data=!4m15!1m8!3m7!1s0x3255760e8f444543:0x7412e2e7a2c8016f!2sCrown+Paper+and+Stationery+Warehouse,+Iligan+City,+9200+Lanao+del+Norte!3b1!8m2!3d8.2238923!4d124.2501049!16s%2Fg%2F11b6_8khds!3m5!1s0x3255779c251b23cf:0x3a684bd25b753962!8m2!3d8.224544!4d124.25048!16s%2Fg%2F11s1817vdx?entry=ttu&g_ep=EgoyMDI1MDgxOS4wIKXMDSoASAFQAw%3D%3D" 
     target="_blank" 
@@ -339,7 +333,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   );
 };
 
-// Footer Component
 const Footer = () => {
   return (
     <footer className="bg-gradient-to-r from-[#042F01] to-[#055B00] text-white py-12">
@@ -412,7 +405,6 @@ export default function Home() {
       <Footer />
 
 
-      {/* Modal with login form */}
       <Modal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)}>
         <LoginPage />
       </Modal>
