@@ -21,42 +21,29 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    // Listen for auth state changes to handle OAuth callback
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (event === "SIGNED_IN" && session?.user) {
         const user = session.user
-        
-        // Check if this is an OAuth sign-in (Google)
-        if (user.app_metadata.provider === 'google') {
-          console.log('Google OAuth user signed in:', user)
-          console.log('User metadata:', user.user_metadata)
-          console.log('App metadata:', user.app_metadata)
-          
+
+        if (user.app_metadata.provider === "google") {
           try {
-            // Extract names from user metadata
             const userMetadata = user.user_metadata
-            const fullName = userMetadata.full_name || userMetadata.name || ''
-            const firstName = userMetadata.given_name || fullName.split(' ')[0] || ''
-            const lastName = userMetadata.family_name || fullName.split(' ').slice(1).join(' ') || ''
-            
-            console.log('Extracted names:', { firstName, lastName, fullName })
-            
-            // Check if profile exists, if not create it with proper data
+            const fullName = userMetadata.full_name || userMetadata.name || ""
+            const firstName = userMetadata.given_name || fullName.split(" ")[0] || ""
+            const lastName = userMetadata.family_name || fullName.split(" ").slice(1).join(" ") || ""
+
             const { data: existingProfile, error: fetchError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
+              .from("profiles")
+              .select("*")
+              .eq("id", user.id)
               .single()
-            
-            if (fetchError && fetchError.code !== 'PGRST116') {
-              console.error('Error fetching profile:', fetchError)
+
+            if (fetchError && fetchError.code !== "PGRST116") {
             }
-            
-            // Create or update profile with Google data
+
             if (!existingProfile) {
-              console.log('Creating new profile with Google data...')
-              const { data: newProfile, error: insertError } = await supabase
-                .from('profiles')
+              const { error: insertError } = await supabase
+                .from("profiles")
                 .insert({
                   id: user.id,
                   email: user.email,
@@ -64,59 +51,36 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                   last_name: lastName,
                   full_name: fullName,
                   avatar_url: userMetadata.avatar_url || userMetadata.picture || null,
-                  updated_at: new Date().toISOString()
+                  updated_at: new Date().toISOString(),
                 })
-                .select()
-                .single()
-              
-              if (insertError) {
-                console.error('Error creating profile:', insertError)
-                throw insertError
-              }
-              
-              console.log('Profile created successfully:', newProfile)
-            } else {
-              console.log('Profile already exists:', existingProfile)
-              
-              // Update profile if names are missing
-              if (!existingProfile.first_name || !existingProfile.last_name) {
-                console.log('Updating profile with Google names...')
-                const { data: updatedProfile, error: updateError } = await supabase
-                  .from('profiles')
-                  .update({
-                    first_name: firstName,
-                    last_name: lastName,
-                    full_name: fullName,
-                    avatar_url: userMetadata.avatar_url || userMetadata.picture || existingProfile.avatar_url,
-                    updated_at: new Date().toISOString()
-                  })
-                  .eq('id', user.id)
-                  .select()
-                  .single()
-                
-                if (updateError) {
-                  console.error('Error updating profile:', updateError)
-                }
-                
-                console.log('Profile updated successfully:', updatedProfile)
-              }
+
+              if (insertError) throw insertError
+            } else if (!existingProfile.first_name || !existingProfile.last_name) {
+              const { error: updateError } = await supabase
+                .from("profiles")
+                .update({
+                  first_name: firstName,
+                  last_name: lastName,
+                  full_name: fullName,
+                  avatar_url: userMetadata.avatar_url || userMetadata.picture || existingProfile.avatar_url,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", user.id)
+
+              if (updateError) {/* Profile update failed */}
             }
-            
+
             setSuccess("Successfully signed in with Google!")
-            
-            // Call success callback
+
             if (onSuccess) {
               setTimeout(() => {
                 onSuccess()
                 handleClose()
               }, 1500)
             } else {
-              setTimeout(() => {
-                handleClose()
-              }, 2000)
+              setTimeout(() => handleClose(), 2000)
             }
           } catch (err) {
-            console.error('Error creating profile for Google user:', err)
             setError("Signed in but profile setup failed. Please contact support.")
           }
         }
@@ -151,142 +115,88 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
     setSuccess(null)
 
     try {
-      // Validate input
       if (!email.trim() || !password.trim() || !firstName.trim() || !lastName.trim()) {
         setError("All fields are required")
         return
       }
 
-      // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email)) {
         setError("Please enter a valid email address")
         return
       }
 
-      // Validate password match
       if (password !== confirmPassword) {
         setError("Passwords don't match")
         return
       }
 
-      // Validate password strength
       if (password.length < 6) {
         setError("Password must be at least 6 characters long")
         return
       }
 
-      // Clean the data before sending
+      const cleanEmail = email.trim().toLowerCase()
       const cleanFirstName = firstName.trim()
       const cleanLastName = lastName.trim()
-      const cleanEmail = email.trim().toLowerCase()
 
-      console.log('Attempting to create user with:', { 
-        email: cleanEmail, 
-        firstName: cleanFirstName, 
-        lastName: cleanLastName 
-      })
-
-      // Sign up with Supabase
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
-        password: password,
+        password,
         options: {
           data: {
             first_name: cleanFirstName,
             last_name: cleanLastName,
-            full_name: `${cleanFirstName} ${cleanLastName}`
+            full_name: `${cleanFirstName} ${cleanLastName}`,
           },
         },
       })
 
       if (signUpError) {
-        console.error('Supabase signUp error:', signUpError)
-        
-        // Handle specific error cases
-        if (signUpError.message.includes('User already registered')) {
+        if (signUpError.message.includes("User already registered")) {
           setError("An account with this email already exists")
-        } else if (signUpError.message.includes('Invalid email')) {
+        } else if (signUpError.message.includes("Invalid email")) {
           setError("Please enter a valid email address")
-        } else if (signUpError.message.includes('Password should be at least')) {
+        } else if (signUpError.message.includes("Password should be at least")) {
           setError("Password must be at least 6 characters long")
-        } else if (signUpError.message.includes('Database error') || 
-                   signUpError.message.includes('relation') || 
-                   signUpError.message.includes('column')) {
-          setError("There was a problem creating your account. Please try again later.")
-          console.error('Database error details:', signUpError)
         } else {
-          setError(signUpError.message)
+          setError("There was a problem creating your account. Please try again later.")
         }
         return
       }
 
-      // Ensure profile is created (only if user was created successfully)
       if (data.user) {
-        console.log('User created successfully, now creating profile...')
-        
         try {
-          const profile = await ensureProfile(data.user)
-          console.log('Profile created/updated successfully:', profile)
-        } catch (profileError) {
-          // Log the actual error
-          console.error('Profile creation error:', {
-            error: profileError,
-            message: profileError instanceof Error ? profileError.message : 'Unknown error',
-            user: { id: data.user.id, email: data.user.email }
-          })
-          
-          // Check if it's an RLS policy error
-          if (profileError instanceof Error) {
-            const errorMsg = profileError.message.toLowerCase()
-            if (errorMsg.includes('policy') || 
-                errorMsg.includes('permission') ||
-                errorMsg.includes('rls') ||
-                errorMsg.includes('row-level security') ||
-                errorMsg.includes('insufficient_privilege')) {
-              setError("Account created but profile setup failed due to permissions. Please contact support.")
-            } else {
-              setError(`Account created but profile setup failed: ${profileError.message}`)
-            }
+          await ensureProfile(data.user)
+        } catch (profileError: any) {
+          const msg = profileError.message?.toLowerCase?.() || ""
+          if (
+            msg.includes("policy") ||
+            msg.includes("permission") ||
+            msg.includes("rls") ||
+            msg.includes("row-level security") ||
+            msg.includes("insufficient_privilege")
+          ) {
+            setError("Account created but profile setup failed due to permissions. Please contact support.")
           } else {
-            setError("Account created but profile setup incomplete. Please try logging in.")
+            setError("Account created but profile setup failed. Please try again.")
           }
           return
         }
       }
 
-      console.log('User and profile created successfully:', data)
-
-      // Check if email confirmation is required
       if (data.user && !data.session) {
-        setSuccess("Account created successfully! Please check your email to verify your account.")
+        setSuccess("Account created! Please check your email to verify your account.")
       } else {
         setSuccess("Account created successfully! You are now logged in.")
       }
 
-      // Call success callback if provided
-      if (onSuccess) {
-        setTimeout(() => {
-          onSuccess()
-          handleClose()
-        }, 2000)
-      } else {
-        setTimeout(() => {
-          handleClose()
-        }, 3000)
-      }
-
+      setTimeout(() => {
+        if (onSuccess) onSuccess()
+        handleClose()
+      }, 2000)
     } catch (err: any) {
-      // Better error logging
-      console.error('Unexpected error during signup:', {
-        error: err,
-        message: err instanceof Error ? err.message : 'Unknown error',
-        type: typeof err,
-        constructor: err?.constructor?.name,
-        stack: err instanceof Error ? err.stack : undefined
-      })
-      
-      setError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.")
+      setError(err.message || "An unexpected error occurred. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -295,30 +205,20 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
   const handleGoogleSignUp = async () => {
     setLoading(true)
     setError(null)
-
     try {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider: "google",
         options: {
           redirectTo: `${window.location.origin}/pages/multifactors/dashboard`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          // Request additional scopes to get profile information
-          scopes: 'email profile'
-        }
+          queryParams: { access_type: "offline", prompt: "consent" },
+          scopes: "email profile",
+        },
       })
-
-      if (error) {
-        console.error('Google OAuth error:', error)
-        setError(error.message)
-        setLoading(false)
-      }
-      // Keep loading state true while redirecting to Google
-    } catch (err: any) {
-      console.error('Unexpected Google OAuth error:', err)
+      if (error) setError(error.message)
+    } catch (err) {
       setError("Failed to sign up with Google. Please try again.")
+    } finally {
+      // keep loading while redirecting is not needed; clear for safety
       setLoading(false)
     }
   }
@@ -327,16 +227,9 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
-        onClick={handleClose}
-      />
-      
-      {/* Modal */}
+      <div className="fixed inset-0 bg-black/50 transition-opacity" onClick={handleClose} />
       <div className="flex min-h-full items-center justify-center p-4">
         <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
-          {/* Close Button */}
           <button
             onClick={handleClose}
             className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors z-10"
@@ -349,27 +242,14 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
           </button>
 
           <div className="p-8">
-            {/* Header */}
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Create Account</h2>
               <p className="text-gray-600 text-sm">Join us and get started today</p>
             </div>
 
-            {/* Success Message */}
-            {success && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg mb-4 text-sm">
-                {success}
-              </div>
-            )}
+            {success && <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg mb-4 text-sm">{success}</div>}
+            {error && <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">{error}</div>}
 
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">
-                {error}
-              </div>
-            )}
-
-            {/* Sign Up Form */}
             <form onSubmit={handleSignUp} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -379,10 +259,10 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                   <input
                     id="modal-firstName"
                     type="text"
-                    placeholder="John"
+                    placeholder="Enter your First Name"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                     disabled={loading}
                     maxLength={50}
@@ -395,10 +275,10 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                   <input
                     id="modal-lastName"
                     type="text"
-                    placeholder="Doe"
+                    placeholder="Enter your Last Name"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     required
                     disabled={loading}
                     maxLength={50}
@@ -413,10 +293,10 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                 <input
                   id="modal-email"
                   type="email"
-                  placeholder="john@example.com"
+                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   required
                   disabled={loading}
                   maxLength={100}
@@ -430,12 +310,12 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                 <input
                   id="modal-password"
                   type="password"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   required
-                  minLength={6}
+                  minLength={8}
                   disabled={loading}
                 />
               </div>
@@ -450,20 +330,14 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
                   placeholder="Confirm your password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition duration-200"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   required
                   disabled={loading}
                 />
               </div>
 
               <div className="flex items-start">
-                <input
-                  id="modal-terms"
-                  type="checkbox"
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded mt-0.5"
-                  required
-                  disabled={loading}
-                />
+                <input id="modal-terms" type="checkbox" className="h-4 w-4 text-purple-600 border-gray-300 rounded" required disabled={loading} />
                 <label htmlFor="modal-terms" className="ml-2 text-xs text-gray-600">
                   I agree to the{" "}
                   <a href="/terms" target="_blank" className="text-purple-600 hover:text-purple-800">
@@ -479,24 +353,22 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-purple-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-purple-700 focus:ring-4 focus:ring-purple-200 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-purple-600 text-white py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-purple-700 focus:ring-4 focus:ring-purple-200 disabled:opacity-50"
               >
                 {loading ? "Creating Account..." : "Create Account"}
               </button>
             </form>
 
-            {/* Divider */}
             <div className="my-4 flex items-center">
               <div className="flex-grow border-t border-gray-200"></div>
               <span className="px-3 text-xs text-gray-500">or</span>
               <div className="flex-grow border-t border-gray-200"></div>
             </div>
 
-            {/* Google Sign Up */}
             <button
               onClick={handleGoogleSignUp}
               disabled={loading}
-              className="w-full border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-gray-50 focus:ring-4 focus:ring-gray-100 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="w-full border border-gray-300 text-gray-700 py-2.5 px-4 rounded-lg text-sm font-medium hover:bg-gray-50 flex items-center justify-center"
             >
               <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                 <path

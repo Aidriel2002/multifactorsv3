@@ -14,7 +14,6 @@ const ensureProfile = async (user: any) => {
     .maybeSingle()
 
   if (existingProfile) {
-    console.log('Existing profile found:', existingProfile)
     
     // Update profile with latest OAuth data if needed
     const userMetadata = user.user_metadata || {}
@@ -40,7 +39,6 @@ const ensureProfile = async (user: any) => {
     
     // If there are updates, apply them
     if (Object.keys(updates).length > 1) { // More than just updated_at
-      console.log('Updating existing profile with:', updates)
       await supabase
         .from("profiles")
         .update(updates)
@@ -56,13 +54,6 @@ const ensureProfile = async (user: any) => {
   const firstName = userMetadata.first_name || userMetadata.given_name || fullName.split(' ')[0] || ''
   const lastName = userMetadata.last_name || userMetadata.family_name || fullName.split(' ').slice(1).join(' ') || ''
   
-  console.log('Creating new profile with OAuth data:', {
-    email: user.email,
-    firstName,
-    lastName,
-    fullName,
-    metadata: userMetadata
-  })
 
   // Auto-approve OAuth users since they're verified by Google
   const { data, error } = await supabase
@@ -83,11 +74,9 @@ const ensureProfile = async (user: any) => {
     .single()
 
   if (error) {
-    console.error("Error creating profile:", error)
     throw error
   }
 
-  console.log("Profile created successfully:", data)
   return data
 }
 
@@ -105,7 +94,6 @@ const checkUserApproval = async () => {
       return { success: false, message: "Profile could not be created" }
     }
 
-    console.log('Profile status:', profile.status)
 
     // Check status as string
     if (profile.status === "pending") {
@@ -122,7 +110,6 @@ const checkUserApproval = async () => {
 
     return { success: true, profile }
   } catch (error) {
-    console.error('Error in checkUserApproval:', error)
     return { success: false, message: "Error checking account status" }
   }
 }
@@ -137,7 +124,6 @@ const updateLastActive = async () => {
         .eq("id", user.id)
     }
   } catch (error) {
-    console.error('Error updating last_active:', error)
   }
 }
 
@@ -149,46 +135,37 @@ export default function OAuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('OAuth callback - Starting authentication check...')
         
         // Get the session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
-          console.error('Session error:', sessionError)
           setError("Authentication failed. Please try again.")
           setTimeout(() => router.push("/"), 3000)
           return
         }
 
         if (!session?.user) {
-          console.error('No session or user found')
           setError("No session found. Please try logging in again.")
           setTimeout(() => router.push("/"), 3000)
           return
         }
 
-        console.log('OAuth user logged in:', session.user)
-        console.log('User metadata:', session.user.user_metadata)
 
-        // Wait a bit for the session to be fully established
-        console.log('Waiting for session to stabilize...')
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Small delay for session stabilization
+        await new Promise(resolve => setTimeout(resolve, 300))
 
         // Ensure profile exists and check approval
         const statusCheck = await checkUserApproval()
         
-        console.log('Status check result:', statusCheck)
         
         if (!statusCheck.success) {
-          console.error('Status check failed:', statusCheck.message)
           await supabase.auth.signOut()
           setError(statusCheck.message)
           setTimeout(() => router.push("/"), 5000)
           return
         }
 
-        console.log('User approved! Updating last active and logging activity...')
 
         // Update last active
         await updateLastActive()
@@ -201,18 +178,14 @@ export default function OAuthCallback() {
             details: 'User successfully authenticated via OAuth',
           })
         } catch (e) {
-          console.warn('Failed to record login activity', e)
         }
 
-        // Wait a bit more to ensure session is fully established
-        console.log('Final wait before redirect...')
-        await new Promise(resolve => setTimeout(resolve, 500))
+        // Brief final delay before redirect
+        await new Promise(resolve => setTimeout(resolve, 200))
 
-        console.log('Redirecting to dashboard...')
         router.push("/multifactors/dashboard")
         
       } catch (err) {
-        console.error("OAuth callback error:", err)
         setError("An unexpected error occurred.")
         setTimeout(() => router.push("/"), 3000)
       } finally {

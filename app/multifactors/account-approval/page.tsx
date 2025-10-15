@@ -97,7 +97,6 @@ export default function UserRoleManagement() {
 
             setUsers(formattedUsers)
         } catch (error) {
-            console.error('Error fetching users:', error)
         } finally {
             setLoading(false)
         }
@@ -173,7 +172,6 @@ export default function UserRoleManagement() {
             await sendStatusUpdateNotification(userId, status)
 
         } catch (error) {
-            console.error('Error updating user status:', error)
         } finally {
             setUpdating(null)
         }
@@ -212,14 +210,12 @@ export default function UserRoleManagement() {
             }
 
         } catch (error) {
-            console.error('Error updating user role:', error)
         } finally {
             setUpdating(null)
         }
     }
 
     const sendStatusUpdateNotification = async (userId: string, status: string) => {
-        console.log(`Sending ${status} notification to user ${userId}`)
     }
 
     const filteredAndSortedUsers = users

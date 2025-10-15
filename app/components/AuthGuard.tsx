@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import { supabase } from '@/app/lib/supabase/client'
 import { checkAuthentication, AuthResult } from '@/app/utils/auth-guard'
-import { ensureStableSession } from '@/app/utils/session-utils'
 import { Loader2 } from 'lucide-react'
 
 interface AuthGuardProps {
@@ -19,6 +18,7 @@ export default function AuthGuard({
   fallback 
 }: AuthGuardProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const [authState, setAuthState] = useState<AuthResult>({
     isAuthenticated: false,
     user: null,
@@ -27,63 +27,65 @@ export default function AuthGuard({
     error: null
   })
   const [shouldRedirect, setShouldRedirect] = useState(false)
-  const initialCheckDone = useRef(false)
-  const redirectTimeoutRef = useRef<NodeJS.Timeout>()
+  const mountedRef = useRef(true)
+  const authCheckInProgress = useRef(false)
 
-  useEffect(() => {
-    let mounted = true
+  // Check if we're on a login/auth page to avoid interference
+  const isAuthPage = pathname?.startsWith('/auth/') || pathname === '/'
+
+  // Fast auth check function with minimal retry logic
+  const performAuthCheck = useCallback(async (retryCount = 0) => {
+    if (!mountedRef.current || authCheckInProgress.current) return
     
-    const checkAuth = async () => {
-      console.log('AuthGuard - Checking authentication...')
-      
-      // Wait longer for OAuth sessions to be established
-      if (!initialCheckDone.current) {
-        console.log('AuthGuard - Initial check, waiting for session...')
-        await new Promise(resolve => setTimeout(resolve, 1500))
-      }
-      
+    authCheckInProgress.current = true
+    
+    try {
       const result = await checkAuthentication(requiredRole)
-      console.log('AuthGuard - Auth check result:', {
-        isAuthenticated: result.isAuthenticated,
-        hasUser: !!result.user,
-        hasProfile: !!result.profile,
-        profileStatus: result.profile?.status,
-        error: result.error
-      })
       
-      if (!mounted) return
+      if (!mountedRef.current) return
       
-      initialCheckDone.current = true
       setAuthState(result)
       
-      // Only set redirect flag if authentication fails after initial check
-      if (!result.isAuthenticated && !result.loading) {
-        console.log('AuthGuard - Authentication failed, will redirect in 2 seconds')
-        
-        // Give more time for OAuth sessions to establish
-        redirectTimeoutRef.current = setTimeout(() => {
-          if (mounted) {
-            setShouldRedirect(true)
+      // Single retry for session/profile issues only
+      if (!result.isAuthenticated && !result.loading && retryCount === 0 && 
+          result.error?.includes('No active session')) {
+        authCheckInProgress.current = false
+        setTimeout(() => {
+          if (mountedRef.current) {
+            performAuthCheck(1)
           }
-        }, 2000)
+        }, 500) // Reduced delay
+        return
+      }
+      
+      // Set redirect flag if not authenticated
+      if (!result.isAuthenticated && !result.loading) {
+        setShouldRedirect(true)
       } else {
-        // Clear any pending redirects if authentication succeeds
-        if (redirectTimeoutRef.current) {
-          clearTimeout(redirectTimeoutRef.current)
-        }
         setShouldRedirect(false)
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        setAuthState({
+          isAuthenticated: false,
+          user: null,
+          profile: null,
+          loading: false,
+          error: 'Authentication check failed'
+        })
+        setShouldRedirect(true)
+      }
+    } finally {
+      authCheckInProgress.current = false
     }
+  }, [requiredRole])
 
-    checkAuth()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('AuthGuard - Auth state changed:', event, 'Session:', !!session)
-      
-      if (!mounted) return
-      
-      if (event === 'SIGNED_OUT') {
+  // Handle auth state changes
+  const handleAuthStateChange = useCallback(async (event: string, session: any) => {
+    if (!mountedRef.current) return
+    
+    switch (event) {
+      case 'SIGNED_OUT':
         setAuthState({
           isAuthenticated: false,
           user: null,
@@ -92,77 +94,54 @@ export default function AuthGuard({
           error: 'Session expired'
         })
         setShouldRedirect(true)
-      } else if (event === 'SIGNED_IN' && session) {
-        console.log('AuthGuard - User signed in, ensuring stable session...')
+        break
         
-        // Wait a bit for the session to be fully established
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        if (!mounted) return
-        
-        console.log('AuthGuard - Re-checking authentication after sign in')
-        const result = await checkAuthentication(requiredRole)
-        
-        if (!mounted) return
-        
-        setAuthState(result)
-        
-        if (!result.isAuthenticated) {
-          console.log('AuthGuard - Authentication failed after sign in')
-          setShouldRedirect(true)
-        } else {
-          console.log('AuthGuard - Authentication successful!')
-          setShouldRedirect(false)
-          // Clear any pending redirects
-          if (redirectTimeoutRef.current) {
-            clearTimeout(redirectTimeoutRef.current)
-          }
+      case 'SIGNED_IN':
+      case 'INITIAL_SESSION':
+        if (session) {
+          // Immediate check without delay
+          performAuthCheck()
         }
-      } else if (event === 'INITIAL_SESSION' && session) {
-        console.log('AuthGuard - Initial session detected, waiting for session to stabilize...')
+        break
         
-        // Wait longer for initial session to be fully established
-        await new Promise(resolve => setTimeout(resolve, 3000))
-        
-        if (!mounted) return
-        
-        console.log('AuthGuard - Re-checking authentication after initial session')
-        const result = await checkAuthentication(requiredRole)
-        
-        if (!mounted) return
-        
-        setAuthState(result)
-        
-        if (result.isAuthenticated) {
-          console.log('AuthGuard - Initial session authentication successful!')
-          setShouldRedirect(false)
-          // Clear any pending redirects
-          if (redirectTimeoutRef.current) {
-            clearTimeout(redirectTimeoutRef.current)
-          }
-        } else {
-          console.log('AuthGuard - Initial session authentication failed')
-          setShouldRedirect(true)
-        }
-      }
-    })
+      case 'TOKEN_REFRESHED':
+        // No action needed
+        break
+    }
+  }, [performAuthCheck])
+
+  // Main effect for auth setup
+  useEffect(() => {
+    mountedRef.current = true
+    
+    // Don't run auth checks on auth pages
+    if (isAuthPage) {
+      return
+    }
+    
+    // Immediate auth check
+    performAuthCheck()
+    
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(handleAuthStateChange)
 
     return () => {
-      mounted = false
+      mountedRef.current = false
       subscription.unsubscribe()
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current)
-      }
     }
-  }, [requiredRole])
+  }, [requiredRole, isAuthPage, performAuthCheck, handleAuthStateChange, pathname])
 
-  // Handle redirect in separate useEffect
+  // Handle redirect
   useEffect(() => {
     if (shouldRedirect && !authState.loading) {
-      console.log('AuthGuard - Redirecting to login page')
       router.push('/')
     }
   }, [shouldRedirect, authState.loading, router])
+
+  // If we're on an auth page, just render children without any auth checks
+  if (isAuthPage) {
+    return <>{children}</>
+  }
 
   // Show loading state
   if (authState.loading) {
@@ -191,6 +170,21 @@ export default function AuthGuard({
     )
   }
 
+  // Show error message if not authenticated but not redirecting yet
+  if (!authState.isAuthenticated && authState.error && !shouldRedirect) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <p className="text-yellow-800 mb-4">{authState.error}</p>
+            <Loader2 className="h-8 w-8 animate-spin text-yellow-600 mx-auto" />
+            <p className="text-yellow-600 text-sm mt-2">Checking authentication...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Show custom fallback if provided and not authenticated
   if (fallback && !authState.isAuthenticated) {
     return <>{fallback}</>
@@ -198,7 +192,6 @@ export default function AuthGuard({
 
   // Render children only if authenticated
   if (authState.isAuthenticated && authState.user) {
-    console.log('AuthGuard - User authenticated, rendering protected content')
     return <>{children}</>
   }
 

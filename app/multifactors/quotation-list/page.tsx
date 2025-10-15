@@ -141,7 +141,6 @@ export default function QuotationListPage() {
       alert('Quotation saved!');
       router.refresh(); // reloads list
     } catch (error) {
-      console.error('Error saving quotation:', error);
       alert('Failed to save quotation');
     }
   };

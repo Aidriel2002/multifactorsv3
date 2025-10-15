@@ -49,7 +49,6 @@ const useIsAdmin = () => {
           .maybeSingle()
         if (!cancelled) setIsAdmin((profile as any)?.role === 'admin')
       } catch (e) {
-        console.error('Error checking admin status:', e)
         if (!cancelled) setIsAdmin(false)
       } finally {
         if (!cancelled) setLoading(false)
@@ -114,7 +113,6 @@ export default function SaveProjectsPage() {
           })
         }
       } catch (e) {
-        console.warn('Activity log failed for opening quotation form', e)
       }
     })()
     router.push(`/multifactors/saved-projects/QuotationForm?projectId=${projectId}&refNo=${refNo}`);
@@ -172,7 +170,6 @@ export default function SaveProjectsPage() {
           })
         }
       } catch (e) {
-        console.warn('Activity log failed for admin remarks update', e)
       }
       
       setProjects(prev => prev.map(p => 
@@ -186,7 +183,6 @@ export default function SaveProjectsPage() {
       setAdminStatus('');
       setAdminRemarks('');
     } catch (error) {
-      console.error('Error updating project remarks:', error);
       alert('Failed to update remarks. Please try again.');
     } finally {
       setLoading(false);

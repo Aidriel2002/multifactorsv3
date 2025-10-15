@@ -53,7 +53,6 @@ function PurchaseOrderPage() {
         }));
         setSuppliers(supplierList);
       } catch (error) {
-        console.error('Error fetching suppliers:', error);
       }
     };
     fetchSuppliers();
@@ -75,7 +74,6 @@ function PurchaseOrderPage() {
           setPoData(prev => ({ ...prev, projectName: selectedProject.projectName }));
         }
       } catch (error) {
-        console.error('Error fetching projects:', error);
       }
     };
     fetchProjects();
@@ -112,7 +110,6 @@ function PurchaseOrderPage() {
           poNumber: newPoNumber
         }));
       } catch (error) {
-        console.error('Error generating PO number:', error);
         const timestamp = Date.now().toString().slice(-6);
         setPoData((prev) => ({
           ...prev,
@@ -172,13 +169,11 @@ function PurchaseOrderPage() {
           })
         }
       } catch (e) {
-        console.warn('Activity log failed for purchase order creation', e)
       }
       
       alert('Purchase Order saved successfully!');
       router.push('/multifactors/projects');
     } catch (error) {
-      console.error('Error saving Purchase Order:', error);
     } finally {
       setIsSubmitting(false);
     }

@@ -29,113 +29,57 @@ export interface AuthResult {
  * 4. User account is approved
  * 5. User has appropriate role (if required)
  */
-export const checkAuthentication = async (requiredRole?: string): Promise<AuthResult> => {
+export const checkAuthentication = async (requiredRole?: string, fallbackUser?: any): Promise<AuthResult> => {
   try {
-    console.log('🔍 AuthGuard - Starting authentication check...')
+    let user: any
+    let session: any = null
     
-    // Get current session with retry for OAuth sessions
-    let session, user, sessionError
-    
-    // Try to get session, with a small delay for OAuth sessions
-    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
-    session = sessionData.session
-    user = sessionData.user
-    sessionError = sessionErr
+    // If we have a fallback user, use it directly
+    if (fallbackUser) {
+      user = fallbackUser
+    } else {
+      // Get current session
+      const { data: sessionData, error: sessionErr } = await supabase.auth.getSession()
+      session = sessionData.session
+      user = sessionData.user
 
-    console.log('🔍 AuthGuard - Initial session check:', {
-      hasSession: !!session,
-      hasUser: !!user,
-      sessionError: sessionError?.message,
-      userEmail: user?.email,
-      sessionUser: session?.user,
-      sessionAccessToken: !!session?.access_token,
-      sessionRefreshToken: !!session?.refresh_token
-    })
-
-    // If we have a session but no user, try to get the user directly
-    if (session && !user && !sessionError) {
-      console.log('🔍 AuthGuard - Session exists but no user, trying to get user directly...')
-      
-      // Try to get user from session.user first
-      if (session.user) {
-        user = session.user
-        console.log('🔍 AuthGuard - Got user from session.user:', session.user.email)
-      } else {
-        // Try to get user directly from auth
-        const { data: { user: directUser }, error: userError } = await supabase.auth.getUser()
+      // Quick validation - no session = not authenticated
+      if (sessionErr || !session || !user) {
+        // Try getUser as a fallback in case getSession() is not working properly
+        const { data: userData, error: userErr } = await supabase.auth.getUser()
         
-        if (directUser && !userError) {
-          user = directUser
-          console.log('🔍 AuthGuard - Got user directly:', directUser.email)
-        } else {
-          console.log('🔍 AuthGuard - Could not get user directly:', userError?.message)
+        if (userErr || !userData.user) {
+          return {
+            isAuthenticated: false,
+            user: null,
+            profile: null,
+            loading: false,
+            error: sessionErr?.message || 'No active session found'
+          }
         }
+        
+        // Use the user from getUser instead
+        user = userData.user
       }
     }
 
-    // If no session found, wait a bit and try again (for OAuth race conditions)
-    if (!session && !sessionError) {
-      console.log('🔍 AuthGuard - No session found, waiting for OAuth session to establish...')
-      await new Promise(resolve => setTimeout(resolve, 1000))
+    // Quick session expiry check - use expires_at as seconds timestamp
+    if (session && session.expires_at) {
+      const now = Math.floor(Date.now() / 1000) // Current time in seconds
+      const expiresAt = session.expires_at // This is already in seconds
       
-      const { data: retrySessionData, error: retrySessionErr } = await supabase.auth.getSession()
-      session = retrySessionData.session
-      user = retrySessionData.user
-      sessionError = retrySessionErr
-      
-      console.log('🔍 AuthGuard - Retry session check:', {
-        hasSession: !!session,
-        hasUser: !!user,
-        sessionError: sessionError?.message,
-        userEmail: user?.email
-      })
-    }
-
-    // Final validation - we need both session and user
-    if (sessionError) {
-      console.log('🔍 AuthGuard - Session error:', sessionError.message)
-      return {
-        isAuthenticated: false,
-        user: null,
-        profile: null,
-        loading: false,
-        error: `Session error: ${sessionError.message}`
-      }
-    }
-
-    if (!session) {
-      console.log('🔍 AuthGuard - No session found')
-      return {
-        isAuthenticated: false,
-        user: null,
-        profile: null,
-        loading: false,
-        error: 'No active session found'
-      }
-    }
-
-    if (!user) {
-      console.log('🔍 AuthGuard - Session exists but no user data, trying to refresh session...')
-      
-      // Try to force refresh the session
-      const refreshResult = await forceSessionRefresh()
-      
-      if (refreshResult.success && refreshResult.user) {
-        console.log('🔍 AuthGuard - Session refreshed successfully, got user:', refreshResult.user.email)
-        user = refreshResult.user
-      } else {
-        console.log('🔍 AuthGuard - Session refresh failed:', refreshResult.error)
+      if (expiresAt <= now) {
         return {
           isAuthenticated: false,
           user: null,
           profile: null,
           loading: false,
-          error: 'Session exists but user data is missing and refresh failed'
+          error: 'Session expired'
         }
       }
     }
 
-    // Check if email is confirmed
+    // Quick email confirmation check
     if (!user.email_confirmed_at) {
       return {
         isAuthenticated: false,
@@ -146,23 +90,14 @@ export const checkAuthentication = async (requiredRole?: string): Promise<AuthRe
       }
     }
 
-    // Get user profile
-    console.log('🔍 AuthGuard - Fetching user profile for:', user.email)
+    // Get user profile (only required fields for speed)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, status, role')
       .eq('id', user.id)
       .single()
 
-    console.log('🔍 AuthGuard - Profile check result:', {
-      hasProfile: !!profile,
-      profileError: profileError?.message,
-      profileStatus: profile?.status,
-      profileRole: profile?.role
-    })
-
     if (profileError || !profile) {
-      console.log('🔍 AuthGuard - Profile not found or error:', profileError?.message)
       return {
         isAuthenticated: false,
         user: null,
@@ -172,11 +107,11 @@ export const checkAuthentication = async (requiredRole?: string): Promise<AuthRe
       }
     }
 
-    // Check if account is approved (but allow OAuth users to pass through)
+    // Check account approval (allow OAuth users to pass through)
     if (profile.status !== 'approved') {
-      // For OAuth users, allow them to pass through even if status is not approved
-      // This handles cases where OAuth users are auto-approved
-      const isOAuthUser = user.app_metadata?.provider === 'google' || user.app_metadata?.provider === 'oauth'
+      const isOAuthUser = user.app_metadata?.provider === 'google' || 
+                         user.app_metadata?.provider === 'oauth' ||
+                         user.app_metadata?.provider === 'github'
       
       if (!isOAuthUser) {
         const statusMessage = profile.status === 'rejected' 
@@ -204,22 +139,22 @@ export const checkAuthentication = async (requiredRole?: string): Promise<AuthRe
       }
     }
 
-    console.log('🔍 AuthGuard - Authentication successful!', {
-      userEmail: user.email,
-      profileStatus: profile.status,
-      profileRole: profile.role,
-      requiredRole
-    })
-
     return {
       isAuthenticated: true,
       user,
-      profile,
+      profile: {
+        id: profile.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || user.email,
+        status: profile.status,
+        role: profile.role,
+        avatar_url: user.user_metadata?.avatar_url,
+        last_active: new Date().toISOString()
+      },
       loading: false,
       error: null
     }
   } catch (error) {
-    console.error('Authentication check error:', error)
     return {
       isAuthenticated: false,
       user: null,
@@ -231,9 +166,39 @@ export const checkAuthentication = async (requiredRole?: string): Promise<AuthRe
 }
 
 /**
+ * Quick session validation without full authentication check
+ * Useful for periodic checks to detect expired sessions
+ */
+export const isSessionValid = async (): Promise<boolean> => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error || !session) {
+      return false
+    }
+    
+    // Check if session is expired - use expires_at as seconds timestamp
+    if (session.expires_at) {
+      const now = Math.floor(Date.now() / 1000) // Current time in seconds
+      const expiresAt = session.expires_at // This is already in seconds
+      if (expiresAt <= now) {
+        return false
+      }
+    }
+    
+    return true
+  } catch (error) {
+    return false
+  }
+}
+
+/**
  * Client-side authentication hook for React components
+ * NOTE: This hook is deprecated in favor of the AuthGuard component
+ * to avoid conflicts with multiple auth state listeners
  */
 export const useAuthGuard = (requiredRole?: string) => {
+  
   const [authState, setAuthState] = useState<AuthResult>({
     isAuthenticated: false,
     user: null,
@@ -258,7 +223,7 @@ export const useAuthGuard = (requiredRole?: string) => {
           user: null,
           profile: null,
           loading: false,
-          error: 'Session expired'
+          error: 'User signed out'
         })
       } else if (event === 'SIGNED_IN' && session) {
         const result = await checkAuthentication(requiredRole)

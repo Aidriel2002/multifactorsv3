@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // For protected routes, check authentication
+  // For protected routes, do a basic session check
   try {
     // Create Supabase client
     const supabase = createClient(supabaseUrl, supabaseKey)
@@ -24,49 +24,20 @@ export async function middleware(request: NextRequest) {
                   request.cookies.get('sb-refresh-token')?.value
 
     if (!token) {
-      return NextResponse.redirect(new URL('/auth/login', request.url))
+      return NextResponse.redirect(new URL('/', request.url))
     }
 
-    // Verify the session
+    // Quick session verification - let AuthGuard handle detailed checks
     const { data: { session }, error } = await supabase.auth.getSession()
 
     if (error || !session?.user) {
       return NextResponse.redirect(new URL('/', request.url))
     }
 
-    // Check if email is confirmed
-    if (!session.user.email_confirmed_at) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-
-    // Get user profile to check approval status
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('status, role')
-      .eq('id', session.user.id)
-      .single()
-
-    if (profileError || !profile) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-
-    // Check if account is approved
-    if (profile.status !== 'approved') {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-
-    // Check role requirements
-    const requiredRole = getRequiredRole(pathname)
-    
-    if (requiredRole && profile.role !== requiredRole) {
-      return NextResponse.redirect(new URL('/', request.url))
-    }
-
-    // Allow the request to proceed
+    // Allow the request to proceed - AuthGuard will handle detailed validation
     return NextResponse.next()
 
   } catch (error) {
-    console.error('Middleware authentication error:', error)
     return NextResponse.redirect(new URL('/', request.url))
   }
 }

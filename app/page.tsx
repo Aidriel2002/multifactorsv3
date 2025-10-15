@@ -258,15 +258,37 @@ const handleSubmit = async (e: React.FormEvent) => {
 
 
             <div className="mt-8">
-              <h4 className="font-semibold text-gray-900 mb-4">Follow Us</h4>
-              <div className="flex space-x-4">
-                {[Github, Facebook, Linkedin].map((Icon, index) => (
-                  <a key={index} href="#" className="w-10 h-10 bg-gray-200 hover:bg-blue-600 text-gray-600 hover:text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110">
-                    <Icon size={20} />
-                  </a>
-                ))}
-              </div>
-            </div>
+  <h4 className="font-semibold text-gray-900 mb-4">Follow Us</h4>
+  <div className="flex space-x-4">
+    <a
+      href="https://github.com/yourusername"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-10 h-10 bg-gray-200 hover:bg-gray-800 text-gray-600 hover:text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
+    >
+      <Github size={20} />
+    </a>
+
+    <a
+      href="https://www.facebook.com/profile.php?id=61581960598822"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-10 h-10 bg-gray-200 hover:bg-blue-600 text-gray-600 hover:text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
+    >
+      <Facebook size={20} />
+    </a>
+
+    <a
+      href="https://www.linkedin.com/in/yourprofile"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-10 h-10 bg-gray-200 hover:bg-blue-700 text-gray-600 hover:text-white rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-110"
+    >
+      <Linkedin size={20} />
+    </a>
+  </div>
+</div>
+
           </div>
 
           <div>
@@ -350,12 +372,27 @@ const Footer = () => {
               Creating exceptional digital experiences that inspire and innovate.
             </p>
             <div className="flex space-x-4">
-              {[Github, Facebook, Linkedin].map((Icon, index) => (
-                <a key={index} href="#" className="text-gray-400 hover:text-white transition-colors duration-200 ">
-                  <Icon size={20} />
-                </a>
-              ))}
-            </div>
+  {[Github, Facebook, Linkedin].map((Icon, index) => {
+    const links = [
+      "https://github.com/yourusername",
+      "https://www.facebook.com/profile.php?id=61581960598822",
+      "https://www.linkedin.com/in/yourprofile",
+    ];
+
+    return (
+      <a
+        key={index}
+        href={links[index]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-gray-400 hover:text-white transition-colors duration-200"
+      >
+        <Icon size={20} />
+      </a>
+    );
+  })}
+</div>
+
           </div>
 
           <div>

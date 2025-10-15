@@ -86,7 +86,6 @@ export default function QuotationForm() {
         });
         setProjects(projectsData);
       } catch (error) {
-        console.error('Error loading projects:', error);
       }
     };
 
@@ -272,7 +271,6 @@ export default function QuotationForm() {
       alert('Quotation saved successfully!');
       router.push('/multifactors/quotation-list');
     } catch (error) {
-      console.error('Error saving quotation:', error);
       alert('Failed to save quotation. Please try again.');
     } finally {
       setIsSubmitting(false);

@@ -50,7 +50,6 @@ export default function QuotationPreview({ quotation, onBack }: Props) {
           projectRef = projectSnap.data().refNo || '';
         }
       } catch (err) {
-        console.error('Error fetching project:', err);
       }
     }
 

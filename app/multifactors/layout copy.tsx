@@ -35,15 +35,12 @@ export default function MultifactorsLayout({
           data: { user },
         } = await supabase.auth.getUser()
 
-        console.log("Current user:", user?.id) // Debug log
 
         if (!user) {
-          console.log("No user found, redirecting to home")
           router.push("/") 
           return
         }
 
-        console.log("Fetching profile for user:", user.id) // Debug log
 
         // First, let's try a more flexible query
         const { data: profiles, error } = await supabase
@@ -52,17 +49,9 @@ export default function MultifactorsLayout({
           .eq("id", user.id)
 
         if (error) {
-          console.error("Profile fetch error:", error)
-          console.error("Error details:", {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code
-          })
           
           // Handle specific error cases
           if (error.code === 'PGRST116') {
-            console.log("No profile found for user, creating or redirecting...")
             // You might want to create a profile here or handle differently
           }
           
@@ -70,11 +59,9 @@ export default function MultifactorsLayout({
           return
         }
 
-        console.log("Profile query result:", profiles) // Debug log
 
         // Check if we got any profiles
         if (!profiles || profiles.length === 0) {
-          console.log("No profile found for user")
           router.push("/")
           return
         }
@@ -98,7 +85,6 @@ export default function MultifactorsLayout({
 
         setLoading(false)
       } catch (error) {
-        console.error("Authentication check failed:", error)
         router.push("/")
       }
     }

@@ -169,12 +169,10 @@ export default function ProjectPage() {
           })
         }
       } catch (e) {
-        console.warn('Activity log failed for project creation', e)
       }
 
       router.push(`/multifactors/saved-projects`);
     } catch (error) {
-      console.error('Error adding project: ', error);
     }
   };
 

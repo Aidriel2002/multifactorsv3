@@ -37,7 +37,6 @@ export default function ProjectLinkedDataPage() {
         const results = await fetchLinkedData();
         setLinkedData(results);
       } catch (err) {
-        console.error('Error fetching linked data:', err);
       } finally {
         setLoading(false);
       }
@@ -95,14 +94,12 @@ export default function ProjectLinkedDataPage() {
   const handleNavigation = (path: string) => router.push(path);
 
   const openModal = (items: ModalItem[], type: 'quotations' | 'purchaseOrders') => {
-    console.log('Opening modal with:', items, type);
     setModalItems(items);
     setModalType(type);
     setShowModal(true);
   };
 
   const closeModal = () => {
-    console.log('Closing modal');
     setShowModal(false);
     setModalItems([]);
   };
@@ -216,7 +213,6 @@ export default function ProjectLinkedDataPage() {
                         type="button"
                         onClick={(e) => {
                           e.preventDefault();
-                          console.log('Button clicked, quotations:', quotations);
                           openModal(quotations as ModalItem[], 'quotations');
                         }}
                         className="w-full bg-green-50 border border-green-200 rounded-lg p-4 hover:bg-green-100 transition-colors"

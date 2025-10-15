@@ -55,14 +55,11 @@ export default function AdminDashboard() {
 
         const { data: usersData, count, error: usersError } = await supabase
           .from('profiles')
-          .select('*', { count: 'exact' });
+          .select('id', { count: 'exact' });
         
         if (usersError) {
-          console.error('Error fetching users from Supabase:', usersError);
           setUserCount(0);
         } else {
-          console.log('Supabase users data:', usersData);
-          console.log('Supabase users count:', count);
           setUserCount(count || 0);
         }
 
@@ -79,7 +76,7 @@ export default function AdminDashboard() {
         setRecentQuotations(recentList);
 
       } catch (error) {
-        console.error('Error fetching dashboard data:', error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }

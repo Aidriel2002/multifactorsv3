@@ -97,12 +97,4 @@ export const debugOAuthConfig = () => {
   
   const config = getOAuthConfig()
   
-  console.log('🔧 OAuth Configuration Debug:')
-  console.log('Origin:', window.location.origin)
-  console.log('Hostname:', window.location.hostname)
-  console.log('Port:', window.location.port)
-  console.log('Redirect URL:', config.redirectUrl)
-  console.log('Is Localhost:', config.isLocalhost)
-  console.log('Is Development:', config.isDevelopment)
-  console.log('Allowed Origins:', config.allowedOrigins)
 }

@@ -19,11 +19,9 @@ const updateLastActive = async () => {
         .eq('id', user.id)
       
       if (error) {
-        console.error('Error updating last_active:', error)
       }
     }
   } catch (error) {
-    console.error('Error in updateLastActive:', error)
   }
 }
 
@@ -56,7 +54,6 @@ const checkUserStatus = async () => {
       .single()
 
     if (profileError) {
-      console.error('Error fetching profile:', profileError)
       return {
         success: false,
         error: 'profile_error',
@@ -85,7 +82,6 @@ const checkUserStatus = async () => {
 
     return { success: true }
   } catch (error) {
-    console.error('Error in checkUserStatus:', error)
     return {
       success: false,
       error: 'unknown_error',
@@ -106,7 +102,6 @@ const resendConfirmationEmail = async (email: string) => {
 
     return { success: true, message: 'Confirmation email sent successfully!' }
   } catch (error: any) {
-    console.error('Error resending confirmation:', error)
     return { 
       success: false, 
       message: error.message || 'Failed to resend confirmation email' 
@@ -231,14 +226,12 @@ export default function LoginPage() {
             details: 'User authenticated with email/password',
           })
         } catch (e) {
-          console.warn('Failed to record login activity', e)
         }
       }
 
       router.push("/multifactors/dashboard")
       
     } catch (error) {
-      console.error('Login error:', error)
       setError('An unexpected error occurred')
     } finally {
       setLoading(false)
@@ -256,22 +249,18 @@ export default function LoginPage() {
       // Get OAuth configuration
       const oauthConfig = getGoogleOAuthConfig()
       
-      console.log('🔐 Starting Google OAuth with config:', oauthConfig)
       
       const { data, error } = await supabase.auth.signInWithOAuth(oauthConfig)
       
       if (error) {
-        console.error('Google OAuth error:', error)
         setError(error.message)
         setLoading(false)
         return
       }
 
-      console.log('Google OAuth initiated successfully:', data)
       // Don't set loading to false here as the user will be redirected
 
     } catch (error: any) {
-      console.error('Google login error:', error)
       setError(error.message || 'An unexpected error occurred during Google sign-in')
       setLoading(false)
     }
@@ -423,7 +412,6 @@ export default function LoginPage() {
       <RegistrationModal
         isOpen={showRegistrationModal}
         onClose={() => setShowRegistrationModal(false)}
-        onSuccess={() => console.log("Registration successful!")}
       />
     </>
   )

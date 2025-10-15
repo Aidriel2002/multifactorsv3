@@ -4,15 +4,12 @@ import { supabase } from '@/app/lib/supabase/client'
 // Performance monitoring utility
 export const measurePerformance = (label: string) => {
   const start = performance.now()
-  console.log(`🚀 Starting ${label}`)
   
   return {
     end: () => {
       const duration = performance.now() - start
-      console.log(`✅ ${label} completed in ${duration.toFixed(2)}ms`)
       
       if (duration > 1000) {
-        console.warn(`⚠️ Slow operation detected: ${label} took ${duration.toFixed(2)}ms`)
       }
       
       return duration
@@ -98,7 +95,6 @@ export const fetchUsersOptimized = async (options: {
     }
   } catch (error) {
     perf.end()
-    console.error('Error fetching users:', error)
     throw error
   }
 }

@@ -407,7 +407,6 @@ export const handlePrint = (data: any, type: PrintType, id: string) => {
     } else {
       img.onload = () => setTimeout(() => printWindow.print(), 100);
       img.onerror = () => {
-        console.warn('Logo failed to load');
         setTimeout(() => printWindow.print(), 100);
       };
     }

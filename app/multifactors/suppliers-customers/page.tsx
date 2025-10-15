@@ -127,7 +127,6 @@ export default function AdminSupplierCustomerPage() {
         })
       }
     } catch (e) {
-      console.warn('Activity log failed for contact creation', e)
     }
 
     // Reset form and close modal
