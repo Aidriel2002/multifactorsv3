@@ -131,8 +131,8 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
         return
       }
 
-      if (password.length < 6) {
-        setError("Password must be at least 6 characters long")
+      if (password.length < 8) {
+        setError("Password must be at least 8 characters long")
         return
       }
 
@@ -158,7 +158,7 @@ export default function RegistrationModal({ isOpen, onClose, onSuccess }: Regist
         } else if (signUpError.message.includes("Invalid email")) {
           setError("Please enter a valid email address")
         } else if (signUpError.message.includes("Password should be at least")) {
-          setError("Password must be at least 6 characters long")
+          setError("Password must be at least 8 characters long")
         } else {
           setError("There was a problem creating your account. Please try again later.")
         }

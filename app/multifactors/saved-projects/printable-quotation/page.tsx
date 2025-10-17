@@ -70,7 +70,7 @@ export default function PrintableQuotation({ quotation }: Props) {
           <Image
             src="/logo.png"
             alt="Company Logo"
-            width={800}
+            width={500}
             height={450}
             style={{
               height: 'auto',
@@ -104,9 +104,8 @@ export default function PrintableQuotation({ quotation }: Props) {
           {q.subject && <p><strong>Subject:</strong> {q.subject}</p>}
           {q.description && (
             <p className="mt-2 whitespace-pre-line">
-              <strong>Description:</strong>
-              <br />
-              {q.description}
+              
+              
             </p>
           )}
         </div>
@@ -144,11 +143,13 @@ export default function PrintableQuotation({ quotation }: Props) {
 
         {/* Signatures */}
         <div className="signature mt-20 flex justify-between">
-          <div className="signature-line w-1/3 text-center">
-            <div className="border-t border-black mt-12 pt-1">Prepared by</div>
+          <div className=" border-t border-black w-80 text-center">
+             <div className="mt-12 "> Dexter Niel Aidriel D. Basergo</div>
+            <div className=" pt-1  signature-line border-t border-black">Prepared by</div>
           </div>
-          <div className="signature-line w-1/3 text-center">
-            <div className="border-t border-black mt-12 pt-1">Approved by</div>
+          <div className=" w-2xs text-center">
+          <div className="mt-12 ">  Engr. Engel Montero</div>
+            <div className="border-t signature-line border-black pt-1">Approved by</div>
           </div>
         </div>
       </div>
